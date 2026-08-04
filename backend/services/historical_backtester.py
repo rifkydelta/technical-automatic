@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
-import talib
+try:
+    import talib
+except ImportError:
+    import utils.ta_fallback as talib
 from typing import List, Dict, Any
 from datetime import datetime, timedelta
 from models.response import StrategyDetail, HistoricalTradeLog, BacktestSummary

@@ -9,7 +9,10 @@ Implements the PROMPT.md specification:
 - Confluence scoring (1-5 points)
 """
 
-import talib
+try:
+    import talib
+except ImportError:
+    import utils.ta_fallback as talib
 import numpy as np
 import pandas as pd
 from typing import List, Dict, Any
