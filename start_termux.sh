@@ -12,7 +12,7 @@ echo "🚀 Memulai Backend API di Background..."
 echo "==================================================="
 
 cd backend
-python -m uvicorn main:app --host 127.0.0.1 --port 8000 > /dev/null 2>&1 &
+python -m uvicorn main:app --host 127.0.0.1 --port 8000 > ../backend.log 2>&1 &
 BACKEND_PID=$!
 cd ..
 
@@ -31,6 +31,14 @@ if curl -s http://127.0.0.1:8000/ > /dev/null; then
     echo "==================================================="
     exec bash
 else
-    echo "❌ Gagal menjalankan Backend API. Pastikan virtualenv telah diinstall."
+    echo "❌ Gagal menjalankan Backend API. Detail Error:"
+    echo "---------------------------------------------------"
+    if [ -f "backend.log" ]; then
+        tail -n 20 backend.log
+    fi
+    echo "---------------------------------------------------"
+    echo "💡 Solusi: Jalankan perintah berikut untuk menginstall library:"
+    echo "   pip install -r backend/requirements.txt"
+    echo "   pip install -e cli/"
     kill $BACKEND_PID 2>/dev/null
 fi
