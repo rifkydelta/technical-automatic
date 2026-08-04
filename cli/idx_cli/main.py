@@ -22,6 +22,7 @@ from idx_cli.commands.news import news_cmd
 from idx_cli.commands.ihsg import ihsg_cmd
 from idx_cli.commands.profile import profile_cmd
 from idx_cli.commands.export import export_cmd
+from idx_cli.commands.help import help_cmd
 
 app = typer.Typer(
     name="idx",
@@ -37,6 +38,7 @@ app.command(name="news", help="Fetch latest market news & catalysts for a ticker
 app.command(name="ihsg", help="Display real-time IHSG (Composite Index) status")(ihsg_cmd)
 app.command(name="profile", help="Display company profile, valuation, & statistics")(profile_cmd)
 app.command(name="export", help="Export analysis data to JSON or TXT file")(export_cmd)
+app.command(name="help", help="Display CLI prompt guide, cheat-sheet, & examples")(help_cmd)
 
 if __name__ == "__main__":
     app()

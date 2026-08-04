@@ -22,6 +22,7 @@ if curl -s http://127.0.0.1:8000/ > /dev/null; then
     echo "✓ Backend API Berhasil Berjalan (PID: $BACKEND_PID)"
     echo "==================================================="
     echo "Gunakan perintah CLI berikut:"
+    echo "  idx help"
     echo "  idx analyze BBCA"
     echo "  idx category bank"
     echo "  idx category bpjs"
