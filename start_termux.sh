@@ -11,8 +11,15 @@ echo "==================================================="
 echo "🚀 Memulai Backend API di Background..."
 echo "==================================================="
 
+PYTHON_CMD="python"
+if command -v python3.12 >/dev/null 2>&1; then
+    PYTHON_CMD="python3.12"
+elif command -v python3 >/dev/null 2>&1; then
+    PYTHON_CMD="python3"
+fi
+
 cd backend
-python -m uvicorn main:app --host 127.0.0.1 --port 8000 > ../backend.log 2>&1 &
+$PYTHON_CMD -m uvicorn main:app --host 127.0.0.1 --port 8000 > ../backend.log 2>&1 &
 BACKEND_PID=$!
 cd ..
 
