@@ -52,15 +52,17 @@ async def analyze_ticker(request: AnalyzeRequest):
     try:
         # 1. Fetch info & stock data
         info = fetcher.fetch_ticker_info(ticker)
+        data = fetcher.fetch_stock_data(ticker)
         
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_data = executor.submit(fetcher.fetch_stock_data, ticker)
-            future_comp_fin = executor.submit(fetcher.fetch_comprehensive_financials, ticker, info.get("last_price", 0.0))
-            future_gf = executor.submit(google_fetcher.fetch_google_finance_data, ticker)
-            
-            data = future_data.result()
-            comp_financials = future_comp_fin.result()
-            gf_data = future_gf.result()
+        try:
+            comp_financials = fetcher.fetch_comprehensive_financials(ticker, info.get("last_price", 0.0))
+        except Exception:
+            comp_financials = {}
+
+        try:
+            gf_data = google_fetcher.fetch_google_finance_data(ticker)
+        except Exception:
+            gf_data = {}
     except HTTPException:
         raise
     except Exception as e:
