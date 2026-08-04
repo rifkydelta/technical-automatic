@@ -33,6 +33,19 @@ export IDX_API_URL=http://192.168.1.100:8000
 
 ---
 
+### 🚀 Menjalankan Backend + CLI di Termux (1 Perintah)
+
+Di folder project, jalankan script `start_termux.sh`:
+
+```bash
+chmod +x start_termux.sh
+./start_termux.sh
+```
+
+Script akan otomatis mengaktifkan virtual environment, menyalakan Backend API di background, dan menyiapkan CLI terminal!
+
+---
+
 ## 🛠 Panduan Penggunaan (CLI Commands)
 
 ### 1. Single Ticker Technical Analysis (`idx analyze`)
