@@ -49,10 +49,10 @@ async def analyze_ticker(request: AnalyzeRequest):
     mode = request.mode if request.mode in ("live", "session_1", "close_market") else "live"
     warnings = []
     
-    # 1. Fetch info & stock data
-    info = fetcher.fetch_ticker_info(ticker)
-    
     try:
+        # 1. Fetch info & stock data
+        info = fetcher.fetch_ticker_info(ticker)
+        
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_data = executor.submit(fetcher.fetch_stock_data, ticker)
             future_comp_fin = executor.submit(fetcher.fetch_comprehensive_financials, ticker, info.get("last_price", 0.0))
@@ -61,12 +61,15 @@ async def analyze_ticker(request: AnalyzeRequest):
             data = future_data.result()
             comp_financials = future_comp_fin.result()
             gf_data = future_gf.result()
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal mengambil data saham untuk {ticker}: {str(e)}")
 
-    daily_df = data.get("daily")
-    if daily_df is None or daily_df.empty:
-        raise HTTPException(status_code=404, detail=f"Data harga harian tidak ditemukan untuk ticker {ticker}.")
+    try:
+        daily_df = data.get("daily")
+        if daily_df is None or daily_df.empty:
+            raise HTTPException(status_code=404, detail=f"Data harga harian tidak ditemukan untuk ticker {ticker}.")
 
     if info.get("last_price") == 0.0 and not daily_df.empty:
         info["last_price"] = float(daily_df['Close'].dropna().iloc[-1])
@@ -376,6 +379,11 @@ async def analyze_ticker(request: AnalyzeRequest):
         session_info=session_info,
         detected_patterns=detected_patterns
     )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"Gagal memproses analisis {ticker}: {str(e)}\n{traceback.format_exc()[:200]}")
 
 @router.post("/screener", response_model=ScreenerResponse)
 async def analyze_screener(request: ScreenerRequest):
