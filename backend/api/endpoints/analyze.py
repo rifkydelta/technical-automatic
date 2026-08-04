@@ -31,16 +31,24 @@ def df_to_ohlcv(df):
     if df is None or df.empty:
         return None
     bars = []
-    # yfinance index is datetime
     for idx, row in df.iterrows():
-        bars.append(OHLCVBar(
-            time=idx.strftime("%Y-%m-%d") if df.index.name == 'Date' or df.index.name is None else str(idx),
-            open=float(row['Open']),
-            high=float(row['High']),
-            low=float(row['Low']),
-            close=float(row['Close']),
-            volume=int(row['Volume'])
-        ))
+        try:
+            time_str = idx.strftime("%Y-%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
+            o = float(row['Open']) if 'Open' in row and not pd.isna(row['Open']) else 0.0
+            h = float(row['High']) if 'High' in row and not pd.isna(row['High']) else 0.0
+            l = float(row['Low']) if 'Low' in row and not pd.isna(row['Low']) else 0.0
+            c = float(row['Close']) if 'Close' in row and not pd.isna(row['Close']) else 0.0
+            v = int(row['Volume']) if 'Volume' in row and not pd.isna(row['Volume']) else 0
+            bars.append(OHLCVBar(
+                time=time_str,
+                open=o,
+                high=h,
+                low=l,
+                close=c,
+                volume=v
+            ))
+        except Exception:
+            pass
     return bars
 
 @router.post("/analyze", response_model=AnalyzeResponse)

@@ -7,7 +7,7 @@ class OHLCVBar(BaseModel):
     high: float
     low: float
     close: float
-    volume: int
+    volume: int = 0
 
 class Point(BaseModel):
     time: str
