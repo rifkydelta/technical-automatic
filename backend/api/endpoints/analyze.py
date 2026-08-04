@@ -49,12 +49,9 @@ async def analyze_ticker(request: AnalyzeRequest):
     mode = request.mode if request.mode in ("live", "session_1", "close_market") else "live"
     warnings = []
     
-    # 1. Fetch info
+    # 1. Fetch info & stock data
     info = fetcher.fetch_ticker_info(ticker)
-    if not info.get("is_valid") or info.get("last_price") == 0.0:
-        raise HTTPException(status_code=404, detail="Ticker not found or invalid")
-        
-    # 2. Fetch data
+    
     try:
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_data = executor.submit(fetcher.fetch_stock_data, ticker)
@@ -65,9 +62,15 @@ async def analyze_ticker(request: AnalyzeRequest):
             comp_financials = future_comp_fin.result()
             gf_data = future_gf.result()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-        
-    daily_df = data["daily"]
+        raise HTTPException(status_code=500, detail=f"Gagal mengambil data saham untuk {ticker}: {str(e)}")
+
+    daily_df = data.get("daily")
+    if daily_df is None or daily_df.empty:
+        raise HTTPException(status_code=404, detail=f"Data harga harian tidak ditemukan untuk ticker {ticker}.")
+
+    if info.get("last_price") == 0.0 and not daily_df.empty:
+        info["last_price"] = float(daily_df['Close'].dropna().iloc[-1])
+        info["is_valid"] = True
     h1_df = data["h1"]
     m15_df = data["m15"]
     
