@@ -1,0 +1,44 @@
+{
+  "props": {
+    "pageProps": {
+      "username": "stockbitnews",
+      "user": {
+        "profile": {
+          "username": "StockbitNews",
+          "fullname": "Stockbit News",
+          "avatar_urls": {
+            "default_url": "https://avatar.stockbit.com/472-1366882439.jpeg",
+            "medium_url": "https://avatar.stockbit.com/472-1366882439_160x160.jpeg",
+            "thumbnail_url": "https://avatar.stockbit.com/472-1366882439_50x50.jpeg"
+          }
+        },
+        "statistic": {
+          "follower_count": 85787,
+          "following_count": 0,
+          "idea_count": 340460
+        },
+        "badge": {
+          "is_verified": true
+        },
+        "created_at": "2013-01-28T01:54:57Z"
+      },
+      "isLoggedInServer": false,
+      "_sentryTraceData": "d429440381d942b989258960cb98a9d7-81d38fd03f213c60-0",
+      "_sentryBaggage": "sentry-environment=production,sentry-release=3.42.0,sentry-public_key=98926e1d329e4da4bf7a3dc35a3f2ee9,sentry-trace_id=d429440381d942b989258960cb98a9d7,sentry-sample_rate=0.01,sentry-transaction=%2F%5Busername%5D,sentry-sampled=false"
+    },
+    "__N_SSP": true
+  },
+  "page": "/[username]",
+  "query": {
+    "username": "stockbitnews"
+  },
+  "buildId": "luciSqLDFEOIJqAjUKOgX",
+  "runtimeConfig": {},
+  "isFallback": false,
+  "dynamicIds": [
+    82516,
+    97052
+  ],
+  "gssp": true,
+  "scriptLoader": []
+}
