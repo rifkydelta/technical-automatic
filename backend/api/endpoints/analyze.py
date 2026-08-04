@@ -240,7 +240,7 @@ async def analyze_ticker(request: AnalyzeRequest):
             cash_balance="Rp15.2T",
             interest_coverage="8.4x",
             net_debt_ebitda="0.6x",
-            roic=f"{round((fin_health_dict.get('roe') or 14) * 0.85, 1)}%"
+            roic=f"{round((float(fin_health_dict.get('roe')) if fin_health_dict.get('roe') is not None else 14.0) * 0.85, 1)}%" if str(fin_health_dict.get('roe','')).replace('.','',1).isdigit() else "11.9%"
         ),
         quality=QualityTabData(
             summary_text=f"Analisis kualitas laba menunjukkan integritas tinggi. F-Score {f_score_res['score']}/9 dan Beneish M-Score ({m_score_res['m_score']}) menunjukkan risiko manipulasi yang rendah.",
@@ -254,7 +254,7 @@ async def analyze_ticker(request: AnalyzeRequest):
             summary_text=f"Konsensus pasar memproyeksikan tren pertumbuhan {ticker} tetap solid dengan estimasi kenaikan pendapatan tahun mendatang.",
             forecast_rev_2026f="Rp142.5T",
             forecast_rev_2027f="Rp158.0T",
-            eps_estimate=f"Rp{round((raw_metrics.get('eps') or 400) * 1.12)}",
+            eps_estimate=f"Rp{round((float(raw_metrics.get('eps')) if raw_metrics.get('eps') is not None else 400.0) * 1.12)}" if str(raw_metrics.get('eps','')).replace('.','',1).isdigit() else "Rp448",
             net_income_estimate="Rp28.4T",
             growth_pct=12.5,
             disclaimer="Proyeksi berbasis konsensus estimasi analis sell-side & model tren historis."
