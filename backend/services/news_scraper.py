@@ -116,6 +116,14 @@ def get_news_by_ticker(ticker: str, company_name: str = None) -> list:
     if not ticker:
         return []
         
+    if not company_name:
+        try:
+            from services.data_fetcher import DataFetcher
+            info = DataFetcher().fetch_ticker_info(ticker)
+            company_name = info.get("name")
+        except Exception:
+            pass
+
     keywords = []
     if company_name:
         # Clean up company name to generate search keywords
