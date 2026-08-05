@@ -81,7 +81,7 @@ class APIClient:
         if company_name:
             params["company_name"] = company_name
         try:
-            with self._client(timeout=15.0) as client:
+            with self._client(timeout=35.0) as client:
                 res = client.get("/api/news", params=params)
                 res.raise_for_status()
                 data = res.json()
