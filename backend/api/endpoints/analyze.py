@@ -31,24 +31,16 @@ def df_to_ohlcv(df):
     if df is None or df.empty:
         return None
     bars = []
+    # yfinance index is datetime
     for idx, row in df.iterrows():
-        try:
-            time_str = idx.strftime("%Y-%m-%d %H:%M") if hasattr(idx, 'strftime') else str(idx)
-            o = float(row['Open']) if 'Open' in row and not pd.isna(row['Open']) else 0.0
-            h = float(row['High']) if 'High' in row and not pd.isna(row['High']) else 0.0
-            l = float(row['Low']) if 'Low' in row and not pd.isna(row['Low']) else 0.0
-            c = float(row['Close']) if 'Close' in row and not pd.isna(row['Close']) else 0.0
-            v = int(row['Volume']) if 'Volume' in row and not pd.isna(row['Volume']) else 0
-            bars.append(OHLCVBar(
-                time=time_str,
-                open=o,
-                high=h,
-                low=l,
-                close=c,
-                volume=v
-            ))
-        except Exception:
-            pass
+        bars.append(OHLCVBar(
+            time=idx.strftime("%Y-%m-%d") if df.index.name == 'Date' or df.index.name is None else str(idx),
+            open=float(row['Open']),
+            high=float(row['High']),
+            low=float(row['Low']),
+            close=float(row['Close']),
+            volume=int(row['Volume'])
+        ))
     return bars
 
 @router.post("/analyze", response_model=AnalyzeResponse)
@@ -57,32 +49,25 @@ async def analyze_ticker(request: AnalyzeRequest):
     mode = request.mode if request.mode in ("live", "session_1", "close_market") else "live"
     warnings = []
     
-    try:
-        # 1. Fetch info & stock data
-        info = fetcher.fetch_ticker_info(ticker)
-        data = fetcher.fetch_stock_data(ticker)
+    # 1. Fetch info
+    info = fetcher.fetch_ticker_info(ticker)
+    if not info.get("is_valid") or info.get("last_price") == 0.0:
+        raise HTTPException(status_code=404, detail="Ticker not found or invalid")
         
-        try:
-            comp_financials = fetcher.fetch_comprehensive_financials(ticker, info.get("last_price", 0.0))
-        except Exception:
-            comp_financials = {}
-
-        try:
-            gf_data = google_fetcher.fetch_google_finance_data(ticker)
-        except Exception:
-            gf_data = {}
-    except HTTPException:
-        raise
+    # 2. Fetch data
+    try:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_data = executor.submit(fetcher.fetch_stock_data, ticker)
+            future_comp_fin = executor.submit(fetcher.fetch_comprehensive_financials, ticker, info.get("last_price", 0.0))
+            future_gf = executor.submit(google_fetcher.fetch_google_finance_data, ticker)
+            
+            data = future_data.result()
+            comp_financials = future_comp_fin.result()
+            gf_data = future_gf.result()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gagal mengambil data saham untuk {ticker}: {str(e)}")
-
-    daily_df = data.get("daily")
-    if daily_df is None or daily_df.empty:
-        raise HTTPException(status_code=404, detail=f"Data harga harian tidak ditemukan untuk ticker {ticker}.")
-
-    if info.get("last_price") == 0.0 and not daily_df.empty:
-        info["last_price"] = float(daily_df['Close'].dropna().iloc[-1])
-        info["is_valid"] = True
+        raise HTTPException(status_code=500, detail=str(e))
+        
+    daily_df = data["daily"]
     h1_df = data["h1"]
     m15_df = data["m15"]
     
@@ -247,7 +232,7 @@ async def analyze_ticker(request: AnalyzeRequest):
             cash_balance="Rp15.2T",
             interest_coverage="8.4x",
             net_debt_ebitda="0.6x",
-            roic=f"{round((float(fin_health_dict.get('roe')) if fin_health_dict.get('roe') is not None else 14.0) * 0.85, 1)}%" if str(fin_health_dict.get('roe','')).replace('.','',1).isdigit() else "11.9%"
+            roic=f"{round((fin_health_dict.get('roe') or 14) * 0.85, 1)}%"
         ),
         quality=QualityTabData(
             summary_text=f"Analisis kualitas laba menunjukkan integritas tinggi. F-Score {f_score_res['score']}/9 dan Beneish M-Score ({m_score_res['m_score']}) menunjukkan risiko manipulasi yang rendah.",
@@ -261,7 +246,7 @@ async def analyze_ticker(request: AnalyzeRequest):
             summary_text=f"Konsensus pasar memproyeksikan tren pertumbuhan {ticker} tetap solid dengan estimasi kenaikan pendapatan tahun mendatang.",
             forecast_rev_2026f="Rp142.5T",
             forecast_rev_2027f="Rp158.0T",
-            eps_estimate=f"Rp{round((float(raw_metrics.get('eps')) if raw_metrics.get('eps') is not None else 400.0) * 1.12)}" if str(raw_metrics.get('eps','')).replace('.','',1).isdigit() else "Rp448",
+            eps_estimate=f"Rp{round((raw_metrics.get('eps') or 400) * 1.12)}",
             net_income_estimate="Rp28.4T",
             growth_pct=12.5,
             disclaimer="Proyeksi berbasis konsensus estimasi analis sell-side & model tren historis."

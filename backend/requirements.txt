@@ -1,5 +1,6 @@
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
+gunicorn>=21.2.0
 yfinance>=0.2.31
 # TA-Lib is optional. If missing, pure-Python fallback (ta_fallback.py) is automatically used!
 # TA-Lib>=0.4.28

@@ -7,7 +7,7 @@ class OHLCVBar(BaseModel):
     high: float
     low: float
     close: float
-    volume: int = 0
+    volume: int
 
 class Point(BaseModel):
     time: str
@@ -111,6 +111,7 @@ class OrderFlowResult(BaseModel):
     
     bandar_area: str
     bandar_area_desc: str
+    score: int = 0
 
 class Scenario(BaseModel):
     name: str # "Primary", "Alternative", "Worst Case"
@@ -270,6 +271,7 @@ class SessionInfo(BaseModel):
     mode_label: str                      # 'Live', 'Session 1 (16/07/26)', etc.
     market_phase: str                    # 'pre_market', 'session_1', 'break', 'session_2', 'post_market'
     available_modes: List[str]           # Modes valid at current time
+    current_time: Optional[str] = None   # Timestamp string for screener responses
     reference_ohlcv: Optional[dict] = None  # { open, high, low, close, volume }
 
 class ValuationModelResult(BaseModel):

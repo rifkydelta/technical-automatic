@@ -34,166 +34,135 @@ class DataFetcher:
     def __init__(self):
         pass
 
-    def _fetch_chart_direct(self, ticker: str, range_str: str = "1y", interval_str: str = "1d") -> pd.DataFrame:
-        """
-        Direct HTTP fetch to Yahoo Finance chart API.
-        Bypasses yfinance crumb / 401 unauthorized errors on cloud servers like Render.
-        """
-        import requests
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker.upper()}.JK?range={range_str}&interval={interval_str}"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-        }
-        try:
-            r = requests.get(url, headers=headers, timeout=10)
-            if r.status_code != 200:
-                return pd.DataFrame()
-            json_data = r.json()
-            result = json_data.get('chart', {}).get('result')
-            if not result:
-                return pd.DataFrame()
-            
-            res = result[0]
-            timestamps = res.get('timestamp', [])
-            if not timestamps:
-                return pd.DataFrame()
-            
-            ts = pd.to_datetime(timestamps, unit='s')
-            quote = res.get('indicators', {}).get('quote', [{}])[0]
-            
-            df = pd.DataFrame({
-                'Open': quote.get('open'),
-                'High': quote.get('high'),
-                'Low': quote.get('low'),
-                'Close': quote.get('close'),
-                'Volume': quote.get('volume')
-            }, index=ts)
-            
-            df = df.dropna(subset=['Close'])
-            return df
-        except Exception:
-            return pd.DataFrame()
-
     def fetch_ticker_info(self, ticker: str) -> Dict[str, Any]:
         """
-        Fetch basic and profile information about the ticker with robust fallback.
+        Fetch basic and profile information about the ticker.
         """
         yf_ticker = f"{ticker}.JK"
         stock = yf.Ticker(yf_ticker)
         
-        info = {}
         try:
-            info = stock.info or {}
+            info = stock.info
+            name = info.get("longName") or info.get("shortName") or ticker
+            sector = info.get("sector", "Unknown")
+            industry = info.get("industry", sector)
+            desc = info.get("longBusinessSummary") or info.get("description") or f"PT {name} merupakan emiten yang terdaftar di Bursa Efek Indonesia (IDX) pada sektor {sector}."
+            
+            price = info.get("currentPrice", info.get("regularMarketPrice", 0.0))
+            div_yield = normalize_dividend_yield(
+                info.get("dividendYield") or info.get("trailingAnnualDividendYield"),
+                dps=info.get("trailingAnnualDividendRate"),
+                current_price=price
+            )
+
+            return {
+                "name": name,
+                "sector": sector,
+                "industry": industry,
+                "description": desc,
+                "website": info.get("website", ""),
+                "employees": info.get("fullTimeEmployees"),
+                "city": info.get("city", "Indonesia"),
+                "address": info.get("address1", ""),
+                "shares_outstanding": info.get("sharesOutstanding"),
+                "float_shares": info.get("floatShares"),
+                "last_price": price,
+                "currency": info.get("currency", "IDR"),
+                "valuation": {
+                    "market_cap": info.get("marketCap"),
+                    "pe_ratio": info.get("trailingPE"),
+                    "pb_ratio": info.get("priceToBook"),
+                    "ps_ratio": info.get("priceToSalesTrailing12Months"),
+                    "dividend_yield": div_yield
+                },
+                "is_valid": True
+            }
         except Exception:
-            info = {}
-
-        name = info.get("longName") or info.get("shortName") or f"PT {ticker} Tbk"
-        sector = info.get("sector", "Financial Services" if ticker in ["BBCA","BBRI","BMRI","BBNI","BRIS"] else "Consumer Cyclical" if ticker in ["BUVA"] else "Energy & Commodities")
-        industry = info.get("industry", sector)
-        desc = info.get("longBusinessSummary") or info.get("description") or f"PT {name} merupakan emiten yang terdaftar di Bursa Efek Indonesia (IDX) pada sektor {sector}."
-        
-        price = info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose") or 0.0
-        
-        # Fallback price from direct Yahoo chart API if price is 0.0
-        if price == 0.0:
-            df_temp = self._fetch_chart_direct(ticker, range_str="5d", interval_str="1d")
-            if not df_temp.empty:
-                price = float(df_temp['Close'].iloc[-1])
-
-        div_yield = normalize_dividend_yield(
-            info.get("dividendYield") or info.get("trailingAnnualDividendYield"),
-            dps=info.get("trailingAnnualDividendRate"),
-            current_price=price
-        )
-
-        return {
-            "name": name,
-            "sector": sector,
-            "industry": industry,
-            "description": desc,
-            "website": info.get("website", ""),
-            "employees": info.get("fullTimeEmployees"),
-            "city": info.get("city", "Jakarta"),
-            "address": info.get("address1", ""),
-            "shares_outstanding": info.get("sharesOutstanding"),
-            "float_shares": info.get("floatShares"),
-            "last_price": price,
-            "currency": info.get("currency", "IDR"),
-            "valuation": {
-                "market_cap": info.get("marketCap"),
-                "pe_ratio": info.get("trailingPE"),
-                "pb_ratio": info.get("priceToBook"),
-                "ps_ratio": info.get("priceToSalesTrailing12Months"),
-                "dividend_yield": div_yield
-            },
-            "is_valid": True if price > 0.0 else False
-        }
+            return {
+                "name": ticker,
+                "sector": "Unknown",
+                "industry": "Unknown",
+                "description": f"Informasi profil bisnis untuk {ticker} belum dapat dimuat dari data feed.",
+                "website": "",
+                "employees": None,
+                "city": "-",
+                "address": "-",
+                "shares_outstanding": None,
+                "float_shares": None,
+                "last_price": 0.0,
+                "currency": "IDR",
+                "valuation": None,
+                "is_valid": False
+            }
 
     def fetch_daily_only(self, ticker: str) -> pd.DataFrame:
         """
         Fetch only Daily data to save bandwidth for the screener.
         """
         yf_ticker = f"{ticker}.JK"
-        try:
-            daily_df = yf.download(yf_ticker, period="1y", interval="1d", progress=False)
-        except Exception:
-            daily_df = pd.DataFrame()
+        daily_df = yf.download(yf_ticker, period="1y", interval="1d", progress=False)
         
-        if daily_df.empty:
-            daily_df = self._fetch_chart_direct(ticker, range_str="1y", interval_str="1d")
-
         if daily_df.empty:
             raise ValueError(f"No daily data found for {ticker}")
             
+        # Clean multi-index columns if yfinance returns them
         if isinstance(daily_df.columns, pd.MultiIndex):
             daily_df.columns = daily_df.columns.get_level_values(0)
             
         return daily_df
 
+    def fetch_bulk_daily(self, tickers: list[str], period: str = "1mo") -> Dict[str, pd.DataFrame]:
+        """
+        Bulk download daily OHLCV for multiple tickers in a single HTTP request.
+        """
+        yf_tickers = [f"{t}.JK" for t in tickers]
+        try:
+            df_all = yf.download(yf_tickers, period=period, interval="1d", group_by="ticker", progress=False, threads=True)
+            result = {}
+            if df_all.empty:
+                return result
+
+            for t in tickers:
+                try:
+                    yf_symbol = f"{t}.JK"
+                    if len(tickers) == 1:
+                        df = df_all.copy()
+                        if isinstance(df.columns, pd.MultiIndex):
+                            df.columns = df.columns.get_level_values(0)
+                    else:
+                        if not isinstance(df_all.columns, pd.MultiIndex) or yf_symbol not in df_all.columns.levels[0]:
+                            continue
+                        df = df_all[yf_symbol].copy()
+                    
+                    df = df.dropna(subset=['Close'])
+                    if not df.empty and len(df) >= 5:
+                        result[t] = df
+                except Exception:
+                    pass
+            return result
+        except Exception:
+            return {}
+
     def fetch_stock_data(self, ticker: str) -> Dict[str, Any]:
         """
-        Fetch Daily, 1H, and 15M OHLCV data with safe exception handling.
+        Fetch Daily, 1H, and 15M OHLCV data.
         """
         yf_ticker = f"{ticker}.JK"
         
         # Daily data (1 year for EMA200)
-        try:
-            daily_df = yf.download(yf_ticker, period="1y", interval="1d", progress=False)
-        except Exception:
-            daily_df = pd.DataFrame()
+        daily_df = yf.download(yf_ticker, period="1y", interval="1d", progress=False)
         
-        if daily_df.empty:
-            daily_df = self._fetch_chart_direct(ticker, range_str="1y", interval_str="1d")
-
         if daily_df.empty:
             raise ValueError(f"No daily data found for {ticker}")
             
-        # 1H data (60 days max)
-        try:
-            h1_df = yf.download(yf_ticker, period="60d", interval="1h", progress=False)
-        except Exception:
-            h1_df = pd.DataFrame()
-
-        if h1_df.empty:
-            h1_df = self._fetch_chart_direct(ticker, range_str="60d", interval_str="1h")
+        # 1H data (730 days max for yfinance)
+        h1_df = yf.download(yf_ticker, period="730d", interval="1h", progress=False)
         
-        # 15M data (30 days max)
-        try:
-            m15_df = yf.download(yf_ticker, period="30d", interval="15m", progress=False)
-        except Exception:
-            m15_df = pd.DataFrame()
-
-        if m15_df.empty:
-            m15_df = self._fetch_chart_direct(ticker, range_str="30d", interval_str="15m")
+        # 15M data (60 days max for yfinance)
+        m15_df = yf.download(yf_ticker, period="60d", interval="15m", progress=False)
         
-        # 1M data (5 days max)
-        try:
-            m1_df = yf.download(yf_ticker, period="5d", interval="1m", progress=False)
-        except Exception:
-            m1_df = pd.DataFrame()
-
-        if m1_df.empty:
-            m1_df = self._fetch_chart_direct(ticker, range_str="5d", interval_str="1m")
+        # 1M data (7 days max, we use 5d just to be safe)
+        m1_df = yf.download(yf_ticker, period="5d", interval="1m", progress=False)
         
         return {
             "daily": self._format_dataframe(daily_df),
