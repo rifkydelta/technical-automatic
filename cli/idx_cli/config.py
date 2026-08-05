@@ -1,6 +1,6 @@
 import os
 
-API_URL = os.getenv("IDX_API_URL", "http://localhost:8000")
+API_URL = os.getenv("IDX_API_URL", "https://technical-automatic.onrender.com")
 DEFAULT_TIMEOUT = float(os.getenv("IDX_TIMEOUT", "30.0"))
 SCREENER_TIMEOUT = float(os.getenv("IDX_SCREENER_TIMEOUT", "120.0"))
 
