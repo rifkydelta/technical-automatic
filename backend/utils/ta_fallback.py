@@ -7,13 +7,13 @@ import pandas as pd
 
 def EMA(close: np.ndarray, timeperiod: int = 20) -> np.ndarray:
     s = pd.Series(close)
-    res = s.ewm(span=timeperiod, adjust=False).mean().values
+    res = s.ewm(span=timeperiod, adjust=False).mean().to_numpy(copy=True)
     res[:timeperiod - 1] = np.nan
     return res
 
 def SMA(close: np.ndarray, timeperiod: int = 20) -> np.ndarray:
     s = pd.Series(close)
-    res = s.rolling(window=timeperiod).mean().values
+    res = s.rolling(window=timeperiod).mean().to_numpy(copy=True)
     return res
 
 def RSI(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
@@ -27,7 +27,7 @@ def RSI(close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
     
     rs = avg_gain / (avg_loss + 1e-10)
     rsi = 100 - (100 / (1 + rs))
-    return rsi.values
+    return rsi.to_numpy(copy=True)
 
 def MACD(close: np.ndarray, fastperiod: int = 12, slowperiod: int = 26, signalperiod: int = 9):
     s = pd.Series(close)
@@ -36,7 +36,7 @@ def MACD(close: np.ndarray, fastperiod: int = 12, slowperiod: int = 26, signalpe
     macd = fast_ema - slow_ema
     macd_signal = macd.ewm(span=signalperiod, adjust=False).mean()
     macd_hist = macd - macd_signal
-    return macd.values, macd_signal.values, macd_hist.values
+    return macd.to_numpy(copy=True), macd_signal.to_numpy(copy=True), macd_hist.to_numpy(copy=True)
 
 def STOCHRSI(close: np.ndarray, timeperiod: int = 14, fastk_period: int = 14, fastd_period: int = 3, fastd_matype: int = 0):
     rsi = pd.Series(RSI(close, timeperiod=timeperiod))
@@ -44,7 +44,7 @@ def STOCHRSI(close: np.ndarray, timeperiod: int = 14, fastk_period: int = 14, fa
     rsi_max = rsi.rolling(window=fastk_period).max()
     stoch_rsi = (rsi - rsi_min) / ((rsi_max - rsi_min) + 1e-10) * 100
     fastd = stoch_rsi.rolling(window=fastd_period).mean()
-    return stoch_rsi.values, fastd.values
+    return stoch_rsi.to_numpy(copy=True), fastd.to_numpy(copy=True)
 
 def ATR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
     h = pd.Series(high)
@@ -57,7 +57,7 @@ def ATR(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 
     tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
     
     atr = tr.ewm(alpha=1/timeperiod, min_periods=timeperiod, adjust=False).mean()
-    return atr.values
+    return atr.to_numpy(copy=True)
 
 def BBANDS(close: np.ndarray, timeperiod: int = 20, nbdevup: float = 2.0, nbdevdn: float = 2.0, matype: int = 0):
     s = pd.Series(close)
@@ -65,7 +65,7 @@ def BBANDS(close: np.ndarray, timeperiod: int = 20, nbdevup: float = 2.0, nbdevd
     std = s.rolling(window=timeperiod).std()
     upper = middle + (std * nbdevup)
     lower = middle - (std * nbdevdn)
-    return upper.values, middle.values, lower.values
+    return upper.to_numpy(copy=True), middle.to_numpy(copy=True), lower.to_numpy(copy=True)
 
 def PLUS_DM(high: np.ndarray, low: np.ndarray) -> pd.Series:
     h = pd.Series(high)
@@ -87,20 +87,20 @@ def PLUS_DI(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: in
     atr_s = pd.Series(ATR(high, low, close, timeperiod=timeperiod))
     plus_dm = PLUS_DM(high, low)
     plus_di = 100 * (plus_dm.ewm(alpha=1/timeperiod, min_periods=timeperiod, adjust=False).mean() / (atr_s + 1e-10))
-    return plus_di.values
+    return plus_di.to_numpy(copy=True)
 
 def MINUS_DI(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
     atr_s = pd.Series(ATR(high, low, close, timeperiod=timeperiod))
     minus_dm = MINUS_DM(high, low)
     minus_di = 100 * (minus_dm.ewm(alpha=1/timeperiod, min_periods=timeperiod, adjust=False).mean() / (atr_s + 1e-10))
-    return minus_di.values
+    return minus_di.to_numpy(copy=True)
 
 def ADX(high: np.ndarray, low: np.ndarray, close: np.ndarray, timeperiod: int = 14) -> np.ndarray:
     p_di = pd.Series(PLUS_DI(high, low, close, timeperiod=timeperiod))
     m_di = pd.Series(MINUS_DI(high, low, close, timeperiod=timeperiod))
     dx = 100 * (p_di - m_di).abs() / ((p_di + m_di) + 1e-10)
     adx = dx.ewm(alpha=1/timeperiod, min_periods=timeperiod, adjust=False).mean()
-    return adx.values
+    return adx.to_numpy(copy=True)
 
 def MFI(high: np.ndarray, low: np.ndarray, close: np.ndarray, volume: np.ndarray, timeperiod: int = 14) -> np.ndarray:
     tp = (pd.Series(high) + pd.Series(low) + pd.Series(close)) / 3.0
@@ -113,7 +113,7 @@ def MFI(high: np.ndarray, low: np.ndarray, close: np.ndarray, volume: np.ndarray
     
     mfr = pos_mf_sum / (neg_mf_sum + 1e-10)
     mfi = 100 - (100 / (1 + mfr))
-    return mfi.values
+    return mfi.to_numpy(copy=True)
 
 # Candlestick Pattern Fallbacks
 def CDLHAMMER(open_arr: np.ndarray, high_arr: np.ndarray, low_arr: np.ndarray, close_arr: np.ndarray) -> np.ndarray:
