@@ -622,7 +622,12 @@ class AnalysisEngine:
             except: pass
         levels.extend(supps)
         
-        # 5. Strategies (Scalping, Intraday, Swing)
+        # 5. Strategies (RELT Swing, RELT Pullback, Scalping/Intraday)
+        from services.relt_signal_engine import ReltSignalEngine
+        relt_engine = ReltSignalEngine()
+        relt_res = relt_engine.analyze(daily_df, reference_price=price, signal_mode="Balanced", entry_mode="Hybrid")
+        setup = relt_res.get("trade_setup", {})
+
         strategies = []
         
         try:
@@ -636,104 +641,96 @@ class AnalysisEngine:
             sig_type = "buy on weakness" if e_low < price else "buy on breakout"
         else:
             sig_type = "sell on strength" if e_low > price else "hold"
-            
-        def get_grade(rr):
-            if rr >= 3: return "A"
-            if rr >= 2: return "B"
-            if rr >= 1: return "C"
-            return "D"
 
-        # --- SWING ---
+        # --- 1. RELT SWING STRATEGY (Adaptive SMC & Trend) ---
+        relt_sl = setup.get("stop_loss", risk.stop_loss)
+        relt_tp1 = setup.get("tp1", risk.target_1)
+        relt_tp2 = setup.get("tp2", risk.target_2)
+        relt_rr = setup.get("risk_reward_ratio", risk.risk_reward_ratio)
         confirmation_buffer = 1.015
-        t_price_swing = e_high * confirmation_buffer if sig_type == "buy on breakout" else e_high * 1.01
+        t_price_swing = price * confirmation_buffer if sig_type == "buy on breakout" else price * 1.01
+
         swing_strat = StrategyDetail(
             timeframe="Swing",
-            grade=get_grade(risk.risk_reward_ratio),
-            signal_type=sig_type,
-            description="Strategi ini didasarkan pada pergerakan harga relatif terhadap zona support terdekat. Target dirancang untuk ditahan selama beberapa hari hingga minggu.",
+            grade=relt_res.get("rating", "A Buy").split(" ")[0],
+            signal_type="buy (RELT Swing)",
+            description="Strategi swing komposit berbasis tren institusional, Smart Money (OB/FVG), dan Stop Loss adaptif anti stop-hunt.",
             entry_low=e_low,
             entry_high=e_high,
-            stop_loss=risk.stop_loss,
-            risk_pct=abs(price - risk.stop_loss) / price * 100,
-            target_1=risk.target_1,
-            target_2=risk.target_2,
-            risk_reward=risk.risk_reward_ratio,
+            stop_loss=relt_sl,
+            risk_pct=setup.get("risk_percent", abs(price - relt_sl) / price * 100 if price > 0 else 0),
+            target_1=relt_tp1,
+            target_2=relt_tp2,
+            risk_reward=relt_rr,
             trigger_price=t_price_swing,
-            trigger_condition=f"Tunggu hingga harga menembus {t_price_swing:,.0f} (termasuk buffer konfirmasi) dengan lonjakan volume.",
-            context=f"RR rasio saat ini adalah {risk.risk_reward_ratio}x, yang tergolong {'layak' if risk.risk_reward_ratio >= 2 else 'berisiko'} untuk diambil."
+            trigger_condition=f"Masuk saat harga terkonfirmasi di atas {t_price_swing:,.0f} dengan dukungan volume dan Supertrend Bullish.",
+            context=f"Setup Grade {relt_res.get('rating')} (Score {relt_res.get('score')}%). Target TP1 (1.3R) dan TP2 (2.0R) dengan Trailing SL."
         )
         if target_date_str:
             swing_strat.backtest = simulator.simulate(swing_strat, m15_df, target_date_str)
 
-        # --- INTRADAY ---
-        intraday_sl = price - (atr * 0.6)
-        intraday_tp1 = price + (atr * 0.8)
-        intraday_tp2 = price + (atr * 1.2)
-        
-        # Ensure Intraday TP doesn't irrationally exceed Swing TP1 if it's too close
-        if intraday_tp1 > risk.target_1 * 1.02:
-            intraday_tp1 = price + (atr * 0.6)
-            intraday_tp2 = price + (atr * 0.8)
+        # --- 2. RELT PULLBACK REVERSAL STRATEGY ---
+        pb_sl = price - (atr * 0.8)
+        pb_tp1 = price + (atr * 1.2)
+        pb_tp2 = price + (atr * 1.8)
+        pb_risk = abs(price - pb_sl)
+        pb_rr = round(abs(pb_tp1 - price) / pb_risk, 2) if pb_risk > 0 else 1.5
+        pb_trigger = price * 1.005
 
-        intraday_risk = abs(price - intraday_sl)
-        intraday_reward = abs(intraday_tp1 - price)
-        intraday_rr = intraday_reward / intraday_risk if intraday_risk > 0 else 0
-        intraday_t_price = e_high * 1.005 if sig_type == "buy on breakout" else e_high * 1.002
-
-        intraday_strat = StrategyDetail(
+        pullback_strat = StrategyDetail(
             timeframe="Intraday",
-            grade=get_grade(intraday_rr),
-            signal_type=sig_type,
-            description="Strategi jangka pendek untuk mengunci profit dalam 1 hari perdagangan. Menggunakan ATR untuk menentukan stop loss dinamis.",
+            grade="A" if relt_res.get("smc", {}).get("liquidity_sweep_low") or relt_res.get("action") == "PULLBACK BUY" else "B",
+            signal_type="buy on pullback",
+            description="Strategi retest EMA harian dengan konfirmasi candle pembalikan (Pinbar / Bullish Engulfing) dan Liquidity Sweep.",
             entry_low=price - (atr * 0.5),
             entry_high=price,
-            stop_loss=intraday_sl,
-            risk_pct=abs(price - intraday_sl) / price * 100,
-            target_1=intraday_tp1,
-            target_2=intraday_tp2,
-            risk_reward=intraday_rr,
-            trigger_price=intraday_t_price,
-            trigger_condition=f"Masuk saat momentum menguat di chart 15m, menembus {intraday_t_price:,.0f}.",
-            context=f"Menggunakan 1.0x ATR sebagai stop loss untuk menghindari noise harian."
+            stop_loss=round(pb_sl, 2),
+            risk_pct=round(abs(price - pb_sl) / price * 100, 2) if price > 0 else 0,
+            target_1=round(pb_tp1, 2),
+            target_2=round(pb_tp2, 2),
+            risk_reward=pb_rr,
+            trigger_price=round(pb_trigger, 2),
+            trigger_condition=f"Masuk saat terjadi pantulan rebound dari support EMA / FVG, menembus {pb_trigger:,.0f}.",
+            context="Menggunakan buffer ATR dinamis untuk mengunci profit harian."
         )
         if target_date_str:
-            intraday_strat.backtest = simulator.simulate(intraday_strat, m15_df, target_date_str)
+            pullback_strat.backtest = simulator.simulate(pullback_strat, m15_df, target_date_str)
 
-        # --- SCALPING ---
+        # --- 3. SCALPING STRATEGY ---
         scalp_sl = price - (atr * 0.3)
         scalp_tp1 = price + (atr * 0.4)
         scalp_tp2 = price + (atr * 0.6)
         scalp_risk = abs(price - scalp_sl)
         scalp_reward = abs(scalp_tp1 - price)
-        scalp_rr = scalp_reward / scalp_risk if scalp_risk > 0 else 0
-        scalp_t_price = price * 1.002 if sig_type == "buy on breakout" else price * 1.001
+        scalp_rr = round(scalp_reward / scalp_risk, 2) if scalp_risk > 0 else 1.3
+        scalp_t_price = price * 1.002
 
         scalp_strat = StrategyDetail(
             timeframe="Scalping",
-            grade=get_grade(scalp_rr),
-            signal_type=sig_type,
-            description="Strategi sangat agresif untuk scalping cepat. Fokus pada aksi harga di timeframe 5m-15m.",
+            grade="A" if relt_res.get("score", 0) >= 70 else "B",
+            signal_type="buy on breakout",
+            description="Strategi agresif scalping cepat berdasarkan momentum breakout menit dan lonjakan volume instan.",
             entry_low=price - (atr * 0.2),
             entry_high=price,
-            stop_loss=scalp_sl,
-            risk_pct=abs(price - scalp_sl) / price * 100,
-            target_1=scalp_tp1,
-            target_2=scalp_tp2,
+            stop_loss=round(scalp_sl, 2),
+            risk_pct=round(abs(price - scalp_sl) / price * 100, 2) if price > 0 else 0,
+            target_1=round(scalp_tp1, 2),
+            target_2=round(scalp_tp2, 2),
             risk_reward=scalp_rr,
-            trigger_price=scalp_t_price,
+            trigger_price=round(scalp_t_price, 2),
             trigger_condition=f"Eksekusi cepat saat breakout volume menit, target {scalp_t_price:,.0f}.",
-            context=f"Risiko dijaga sangat ketat di 0.3x ATR."
+            context="Risiko dijaga sangat ketat di 0.3x ATR."
         )
         if target_date_str:
             scalp_strat.backtest = simulator.simulate(scalp_strat, m15_df, target_date_str)
             
-        # Strict Risk Filter: Do not recommend positions if risky or not a buy signal
-        is_risky = risk.is_rejected or ("buy" not in rec.lower() and "bullish" not in rec.lower())
+        # Strict Risk Filter: Do not recommend positions if risky or avoid rating
+        is_risky = risk.is_rejected or ("avoid" in relt_res.get("rating", "").lower())
         if not is_risky:
-            strategies.extend([scalp_strat, intraday_strat, swing_strat])
+            strategies.extend([scalp_strat, pullback_strat, swing_strat])
         
         historical_results = []
-        if m15_df is not None and not m15_df.empty:
+        if daily_df is not None and not daily_df.empty:
             historical_results = hist_backtester.run_backtest(daily_df, m15_df)
 
         return TechnicalDetail(

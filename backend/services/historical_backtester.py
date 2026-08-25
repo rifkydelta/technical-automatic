@@ -1,14 +1,21 @@
+"""
+Historical Backtester Engine - Updated with RELT Signal Strategy
+Implements full historical strategy simulation matching reltsignal.pine:
+- Backtest Date Range (365 days)
+- Multi-mode entry (Momentum, Pullback, Hybrid)
+- Adaptive Initial Stop Loss & Anti Stop-Hunt protection
+- TP1 (1.3R), TP2 (2.0R), and Trailing Stop Loss simulation
+- Comprehensive performance metrics: Win Rate %, Net PnL %, Win/Loss breakdown, Trade Logs
+"""
+
 import pandas as pd
 import numpy as np
-try:
-    import talib
-except ImportError:
-    import utils.ta_fallback as talib
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from models.response import StrategyDetail, HistoricalTradeLog, BacktestSummary
 from services.trade_simulator import TradeSimulator
-from services.pattern_engine import PatternEngine
+from services.relt_signal_engine import ReltSignalEngine
+from services.supertrend_engine import SupertrendEngine
 from zoneinfo import ZoneInfo
 
 WIB = ZoneInfo("Asia/Jakarta")
@@ -16,218 +23,252 @@ WIB = ZoneInfo("Asia/Jakarta")
 class HistoricalBacktester:
     def __init__(self):
         self.simulator = TradeSimulator()
+        self.relt_engine = ReltSignalEngine()
+        self.supertrend_engine = SupertrendEngine()
+
+    def run_relt_daily_backtest(
+        self,
+        daily_df: pd.DataFrame,
+        lookback_days: int = 365,
+        signal_mode: str = "Balanced",
+        entry_mode: str = "Hybrid"
+    ) -> Optional[BacktestSummary]:
+        """
+        Runs full multi-bar historical backtest of the RELT Signal Strategy on Daily OHLCV.
+        """
+        if daily_df is None or daily_df.empty or len(daily_df) < 30:
+            return None
+
+        df = daily_df.copy()
+        n = len(df)
+        start_idx = max(25, n - min(lookback_days, n))
+
+        trade_logs = []
+        in_trade = False
+        entry_price = 0.0
+        stop_loss = 0.0
+        tp1 = 0.0
+        tp2 = 0.0
+        trailing_sl = 0.0
+        entry_date = ""
+        entry_time_str = ""
+        tp1_hit = False
+        action = "BUY"
+
+        for i in range(start_idx, n):
+            past_slice = df.iloc[:i + 1]
+            cur_row = df.iloc[i]
+            cur_open = float(cur_row['Open'])
+            cur_high = float(cur_row['High'])
+            cur_low = float(cur_row['Low'])
+            cur_close = float(cur_row['Close'])
+            raw_time = cur_row.name
+            date_str = raw_time.strftime("%d %b %Y") if hasattr(raw_time, 'strftime') else str(raw_time)
+            iso_time_str = raw_time.strftime("%Y-%m-%d") if hasattr(raw_time, 'strftime') else str(raw_time)
+
+            if not in_trade:
+                # Evaluate RELT Strategy Entry
+                relt = self.relt_engine.analyze(
+                    daily_df=past_slice,
+                    reference_price=cur_close,
+                    signal_mode=signal_mode,
+                    entry_mode=entry_mode,
+                    mtf_bullish=True
+                )
+
+                action = relt.get("action", "WAIT")
+                score = relt.get("score", 0)
+                is_buy_signal = action in ["ULTRA BUY", "STRONG BUY", "PULLBACK BUY"] and not relt.get("is_no_trade_zone", False)
+
+                if is_buy_signal:
+                    in_trade = True
+                    entry_price = cur_close
+                    stop_loss = relt["trade_setup"]["stop_loss"]
+                    tp1 = relt["trade_setup"]["tp1"]
+                    tp2 = relt["trade_setup"]["tp2"]
+                    # Dynamic trailing stop: initial 3.5% below entry
+                    trailing_sl = cur_close * 0.965
+                    entry_date = date_str
+                    entry_time_str = iso_time_str
+                    tp1_hit = False
+
+            else:
+                # In Trade - update trailing SL (tightens as price rises)
+                new_trail = cur_close * 0.965
+                trailing_sl = max(trailing_sl, new_trail)
+
+                # Check Exits matching reltsignal.pine
+                status = None
+                exit_price = 0.0
+
+                # 1. Stop Loss Hit
+                if cur_low <= stop_loss:
+                    status = "hit_sl"
+                    exit_price = stop_loss
+                # 2. Trailing Stop Hit (if TP1 was hit or in profit)
+                elif cur_low <= trailing_sl and (tp1_hit or cur_close > entry_price):
+                    status = "hit_trail_sl"
+                    exit_price = trailing_sl
+                # 3. Take Profit 2 (Runner Target)
+                elif cur_high >= tp2:
+                    status = "hit_tp2"
+                    exit_price = tp2
+                # 4. Take Profit 1 (Lock in gains)
+                elif cur_high >= tp1 and not tp1_hit:
+                    tp1_hit = True
+                    # Lock trailing stop to break-even + small profit
+                    trailing_sl = max(trailing_sl, entry_price * 1.01)
+
+                # 5. Supertrend / Momentum Breakdown Exit (Pine Script stExitSignalLong)
+                if not status and len(past_slice) >= 15:
+                    st_res = self.supertrend_engine.calculate(past_slice)
+                    if st_res.get("st_trend") == "Bearish":
+                        status = "st_exit"
+                        exit_price = cur_close
+
+                # If exited on this candle
+                if status:
+                    pnl_pct = ((exit_price - entry_price) / entry_price * 100.0) if entry_price > 0 else 0.0
+                    trade_logs.append(HistoricalTradeLog(
+                        date=f"{entry_date} -> {date_str}",
+                        signal_type=f"RELT Long ({action})",
+                        trigger_price=entry_price,
+                        entry_price=entry_price,
+                        exit_price=round(exit_price, 2),
+                        status=status,
+                        pnl_pct=round(pnl_pct, 2),
+                        entry_time=entry_time_str,
+                        exit_time=iso_time_str
+                    ))
+                    in_trade = False
+
+        # Close open trade at the end of backtest range
+        if in_trade:
+            final_close = float(df['Close'].iloc[-1])
+            pnl_pct = ((final_close - entry_price) / entry_price * 100.0) if entry_price > 0 else 0.0
+            trade_logs.append(HistoricalTradeLog(
+                date=f"{entry_date} -> Now",
+                signal_type="RELT Long (Open)",
+                trigger_price=entry_price,
+                entry_price=entry_price,
+                exit_price=round(final_close, 2),
+                status="open_floating",
+                pnl_pct=round(pnl_pct, 2),
+                entry_time=entry_time_str,
+                exit_time=iso_time_str
+            ))
+
+        total_trades = len(trade_logs)
+        win_count = sum(1 for t in trade_logs if t.pnl_pct > 0)
+        loss_count = sum(1 for t in trade_logs if t.pnl_pct < 0)
+        expired_count = sum(1 for t in trade_logs if t.pnl_pct == 0)
+        win_rate = (win_count / total_trades * 100.0) if total_trades > 0 else 0.0
+        total_pnl = sum(t.pnl_pct for t in trade_logs)
+
+        # Reverse so newest trades show first
+        sorted_logs = list(reversed(trade_logs))
+
+        return BacktestSummary(
+            timeframe=f"RELT Strategy (Daily {lookback_days}D)",
+            total_trades=total_trades,
+            win_count=win_count,
+            loss_count=loss_count,
+            expired_count=expired_count,
+            win_rate_pct=round(win_rate, 2),
+            total_pnl_pct=round(total_pnl, 2),
+            trade_logs=sorted_logs
+        )
 
     def run_backtest(self, daily_df: pd.DataFrame, m15_df: pd.DataFrame) -> List[BacktestSummary]:
-        if daily_df is None or daily_df.empty or m15_df is None or m15_df.empty:
-            return []
-            
-        # Ensure timezone
-        if m15_df.index.tz is None:
-            m15_df.index = m15_df.index.tz_localize('UTC').tz_convert(WIB)
-            
-        # 1. Get unique dates in m15_df (sorted)
-        m15_dates = sorted(list(set(m15_df.index.strftime("%Y-%m-%d"))))
-        
-        # 2. Calculate historical ATR, SMA20, and RSI on daily_df
-        high = daily_df['High'].values
-        low = daily_df['Low'].values
-        close = daily_df['Close'].values
-        
-        atr_array = talib.ATR(high, low, close, timeperiod=14)
-        sma20_array = talib.SMA(close, timeperiod=20)
-        sma50_array = talib.SMA(close, timeperiod=50)
-        rsi_array = talib.RSI(close, timeperiod=14)
-        macd, macdsignal, macdhist = talib.MACD(close, fastperiod=12, slowperiod=26, signalperiod=9)
-        
-        daily_df_copy = daily_df.copy()
-        daily_df_copy['ATR'] = atr_array
-        daily_df_copy['SMA20'] = sma20_array
-        daily_df_copy['SMA50'] = sma50_array
-        daily_df_copy['RSI'] = rsi_array
-        daily_df_copy['MACD_HIST'] = macdhist
-        
-        # We will track results for Intraday and Scalping
-        intraday_logs = []
-        scalping_logs = []
-        
-        # 3. Loop through available intraday dates (max ~40 days)
-        # We skip the very first date if it doesn't have a previous day in daily_df for ATR
-        for target_date_str in m15_dates:
-            target_ts = pd.Timestamp(target_date_str)
-            
-            # Find the previous day's data in daily_df
-            # If target date exists in daily_df, prev day is the one before it
-            past_data = daily_df_copy[daily_df_copy.index < target_ts]
-            if past_data.empty:
-                continue
-                
-            prev_row = past_data.iloc[-1]
-            prev_atr = prev_row['ATR']
-            prev_rsi = prev_row['RSI']
-            
-            if pd.isna(prev_atr) or pd.isna(prev_rsi):
-                continue
-                
-            # Current day open price (we can get from m15_df first bar of the day)
-            day_data = m15_df[m15_df.index.strftime("%Y-%m-%d") == target_date_str]
-            if day_data.empty:
-                continue
-                
-            day_open = float(day_data['Open'].iloc[0])
-            sma20_prev = prev_row['SMA20'] if not pd.isna(prev_row['SMA20']) else day_open
-            sma50_prev = prev_row['SMA50'] if not pd.isna(prev_row['SMA50']) else day_open
-            macd_hist_prev = prev_row['MACD_HIST'] if not pd.isna(prev_row['MACD_HIST']) else 0
-            
-            # Strict Strategy Filter
-            # 1. Momentum & daily trend check
-            is_indicator_bullish = (day_open > sma50_prev) and (prev_rsi > 45) and (macd_hist_prev > -0.05)
-            
-            # 2. Daily Chart Pattern check
-            pe = PatternEngine()
-            patterns = pe.detect_patterns(past_data)
-            has_bullish_chart_pattern = False
-            if patterns:
-                pattern = patterns[0]
-                if pattern['pattern_id'] == 'double-bottom':
-                    has_bullish_chart_pattern = True
-            
-            # 3. Daily Candlestick Pattern check
-            candles = pe.detect_candlestick_patterns(past_data)
-            has_bullish_candle = "Hammer" in candles or "Bullish Engulfing" in candles
-            
-            # 4. Daily Volume check
-            prev_vol = float(prev_row['Volume']) if 'Volume' in prev_row else 0
-            vol_history = past_data['Volume'].tail(20)
-            avg_vol_20 = vol_history.mean() if len(vol_history) > 0 else 1
-            vol_ratio = prev_vol / avg_vol_20 if avg_vol_20 > 0 else 0
-            has_volume_confirmation = (vol_ratio >= 1.2)
-            
-            # Strictly combine them:
-            # - Trend must be generally bullish
-            # - Must have chart pattern, candlestick pattern, or bullish close
-            # - Breakout day volume must be elevated (ratio >= 1.2x MA20)
-            is_strict_setup = is_indicator_bullish and (has_bullish_chart_pattern or has_bullish_candle or "Bullish Close" in candles) and has_volume_confirmation
-            
-            if not is_strict_setup:
-                # NO_TRADE / SKIP
-                continue
-                
-            sig_type = "buy on breakout"
-            
-            # Build setup context reasons
-            reasons = []
-            if has_bullish_chart_pattern:
-                reasons.append("Pattern: Double Bottom")
-            if has_bullish_candle:
-                reasons.append(f"Candles: {', '.join([c for c in candles if c in ['Hammer', 'Bullish Engulfing']])}")
-            elif "Bullish Close" in candles:
-                reasons.append("Candle: Bullish Close")
-            reasons.append(f"Vol Ratio: {vol_ratio:.1f}x")
-            setup_context = " | ".join(reasons)
-            
-            # Reconstruct StrategyDetail for Scalping
-            scalp_sl = day_open - (prev_atr * 0.3)
-            scalp_tp1 = day_open + (prev_atr * 0.4)
-            scalp_tp2 = day_open + (prev_atr * 0.6)
-            scalp_t_price = day_open * 1.002
-            
-            scalp_strat = StrategyDetail(
-                timeframe="Scalping",
-                grade="A" if has_bullish_chart_pattern else "B",
-                signal_type="buy on breakout",
-                description=f"Strict: {setup_context}",
-                entry_low=day_open - (prev_atr * 0.2),
-                entry_high=day_open,
-                stop_loss=scalp_sl,
-                risk_pct=0,
-                target_1=scalp_tp1,
-                target_2=scalp_tp2,
-                risk_reward=0,
-                trigger_price=scalp_t_price,
-                trigger_condition="",
-                context=setup_context
-            )
-            
-            # Reconstruct StrategyDetail for Intraday
-            intraday_sl = day_open - (prev_atr * 0.6)
-            intraday_tp1 = day_open + (prev_atr * 0.8)
-            intraday_tp2 = day_open + (prev_atr * 1.2)
-            intraday_t_price = day_open * 1.005
-            
-            intraday_strat = StrategyDetail(
-                timeframe="Intraday",
-                grade="A" if has_bullish_chart_pattern else "B",
-                signal_type="buy on breakout",
-                description=f"Strict: {setup_context}",
-                entry_low=day_open - (prev_atr * 0.5),
-                entry_high=day_open,
-                stop_loss=intraday_sl,
-                risk_pct=0,
-                target_1=intraday_tp1,
-                target_2=intraday_tp2,
-                risk_reward=0,
-                trigger_price=intraday_t_price,
-                trigger_condition="",
-                context=setup_context
-            )
-            
-            # Backtest!
-            # Convert target_date_str (YYYY-MM-DD) to format required by simulate (DD/MM/YY)
-            dt = datetime.strptime(target_date_str, "%Y-%m-%d")
-            sim_date_str = dt.strftime("%d/%m/%y")
-            
-            s_res = self.simulator.simulate(scalp_strat, m15_df, sim_date_str)
-            if s_res and s_res.status != "waiting_entry":
-                scalping_logs.append(HistoricalTradeLog(
-                    date=dt.strftime("%d %b %Y"),
-                    signal_type=f"Buy ({setup_context})",
-                    trigger_price=scalp_t_price,
-                    entry_price=s_res.entry_hit_price,
-                    exit_price=s_res.exit_price,
-                    status=s_res.status,
-                    pnl_pct=s_res.pnl_pct
-                ))
-                
-            i_res = self.simulator.simulate(intraday_strat, m15_df, sim_date_str)
-            if i_res and i_res.status != "waiting_entry":
-                intraday_logs.append(HistoricalTradeLog(
-                    date=dt.strftime("%d %b %Y"),
-                    signal_type=f"Buy ({setup_context})",
-                    trigger_price=intraday_t_price,
-                    entry_price=i_res.entry_hit_price,
-                    exit_price=i_res.exit_price,
-                    status=i_res.status,
-                    pnl_pct=i_res.pnl_pct
-                ))
-                
-        # 4. Summarize
-        def build_summary(tf: str, logs: List[HistoricalTradeLog]) -> BacktestSummary:
-            total = len(logs)
-            win = sum(1 for x in logs if x.status in ["hit_tp1", "hit_tp2"])
-            loss = sum(1 for x in logs if x.status == "hit_sl")
-            exp = sum(1 for x in logs if x.status == "expired")
-            
-            wr = (win / total * 100) if total > 0 else 0.0
-            pnl = sum(x.pnl_pct for x in logs)
-            
-            # Sort logs newest first
-            logs.reverse()
-            
-            return BacktestSummary(
-                timeframe=tf,
-                total_trades=total,
-                win_count=win,
-                loss_count=loss,
-                expired_count=exp,
-                win_rate_pct=wr,
-                total_pnl_pct=pnl,
-                trade_logs=logs
-            )
-            
+        """
+        Runs comprehensive multi-timeframe backtests:
+        1. RELT Daily 365-Day Strategy Backtest
+        2. Intraday / Scalping Backtests
+        """
         summaries = []
-        if scalping_logs:
-            summaries.append(build_summary("Scalping", scalping_logs))
-        if intraday_logs:
-            summaries.append(build_summary("Intraday", intraday_logs))
-            
+
+        # 1. Primary RELT Daily Backtest (365 Days)
+        if daily_df is not None and not daily_df.empty:
+            relt_daily_summary = self.run_relt_daily_backtest(daily_df, lookback_days=365)
+            if relt_daily_summary:
+                summaries.append(relt_daily_summary)
+
+        # 2. Intraday Backtests if M15 data is available
+        if m15_df is not None and not m15_df.empty and daily_df is not None:
+            if m15_df.index.tz is None:
+                m15_df.index = m15_df.index.tz_localize('UTC').tz_convert(WIB)
+
+            m15_dates = sorted(list(set(m15_df.index.strftime("%Y-%m-%d"))))
+            intraday_logs = []
+            scalping_logs = []
+
+            for target_date_str in m15_dates:
+                target_ts = pd.Timestamp(target_date_str)
+                past_data = daily_df[daily_df.index < target_ts]
+                if len(past_data) < 20:
+                    continue
+
+                day_data = m15_df[m15_df.index.strftime("%Y-%m-%d") == target_date_str]
+                if day_data.empty:
+                    continue
+
+                day_open = float(day_data['Open'].iloc[0])
+                relt_res = self.relt_engine.analyze(past_data, reference_price=day_open, signal_mode="Balanced")
+
+                if relt_res.get("action") not in ["ULTRA BUY", "STRONG BUY", "PULLBACK BUY"]:
+                    continue
+
+                setup = relt_res.get("trade_setup", {})
+                dt = datetime.strptime(target_date_str, "%Y-%m-%d")
+                sim_date_str = dt.strftime("%d/%m/%y")
+
+                # Strategy Details for simulation
+                intraday_strat = StrategyDetail(
+                    timeframe="Intraday",
+                    grade=relt_res.get("rating", "A"),
+                    signal_type="buy",
+                    description=f"RELT {relt_res.get('action')}",
+                    entry_low=setup.get("entry_price", day_open),
+                    entry_high=setup.get("entry_price", day_open),
+                    stop_loss=setup.get("stop_loss", day_open * 0.95),
+                    risk_pct=setup.get("risk_percent", 2.0),
+                    target_1=setup.get("tp1", day_open * 1.03),
+                    target_2=setup.get("tp2", day_open * 1.06),
+                    risk_reward=setup.get("risk_reward_ratio", 2.0),
+                    trigger_price=day_open,
+                    trigger_condition="RELT Signal Trigger",
+                    context="Multi-indicator momentum & SMC confirmation"
+                )
+
+                i_res = self.simulator.simulate(intraday_strat, m15_df, sim_date_str)
+                if i_res and i_res.status != "waiting_entry":
+                    intraday_logs.append(HistoricalTradeLog(
+                        date=dt.strftime("%d %b %Y"),
+                        signal_type=f"RELT Buy ({relt_res.get('action')})",
+                        trigger_price=day_open,
+                        entry_price=i_res.entry_hit_price,
+                        exit_price=i_res.exit_price,
+                        status=i_res.status,
+                        pnl_pct=i_res.pnl_pct
+                    ))
+
+            if intraday_logs:
+                total = len(intraday_logs)
+                win = sum(1 for x in intraday_logs if x.pnl_pct > 0)
+                loss = sum(1 for x in intraday_logs if x.pnl_pct < 0)
+                exp = sum(1 for x in intraday_logs if x.pnl_pct == 0)
+                wr = (win / total * 100.0) if total > 0 else 0.0
+                pnl = sum(x.pnl_pct for x in intraday_logs)
+
+                summaries.append(BacktestSummary(
+                    timeframe="Intraday RELT Strategy",
+                    total_trades=total,
+                    win_count=win,
+                    loss_count=loss,
+                    expired_count=exp,
+                    win_rate_pct=round(wr, 2),
+                    total_pnl_pct=round(pnl, 2),
+                    trade_logs=list(reversed(intraday_logs))
+                ))
+
         return summaries

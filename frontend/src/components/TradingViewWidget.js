@@ -30,7 +30,6 @@ export default function TradingViewWidget({ ticker, height = '480px' }) {
           allow_symbol_change: true,
           container_id: containerRef.current.id,
           studies: [
-            "Volume@tv-basicstudies",
             "MAExp@tv-basicstudies"
           ],
         });

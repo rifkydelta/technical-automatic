@@ -1,0 +1,1153 @@
+//@version=6
+strategy("RELT SIGNAL - Universal MTF Fallback", overlay = true, initial_capital = 10000000, process_orders_on_close = true, calc_on_every_tick = true, pyramiding = 0, max_lines_count = 500, max_labels_count = 500, max_boxes_count = 200)
+
+//======================================
+// INPUT GROUPS - CLEAN UI
+//======================================
+groupBacktest = "00. Backtest Range"
+groupCore     = "01. Mode & Signal"
+groupMTF      = "02. Multi Timeframe Confirmation"
+groupRisk     = "03. Risk & Position Sizing"
+groupST       = "04. Supertrend Filter"
+groupSMC      = "05. Smart Money Concept"
+groupVisual   = "06. Visual & Objects"
+groupPredict  = "07. Direction Prediction"
+groupTable    = "08. Dashboard"
+groupAlert    = "09. Alerts"
+
+//======================================
+// 00. BACKTEST RANGE
+//======================================
+useLastYearOnly = input.bool(true, "Use Date Filter", group = groupBacktest, inline = "bt1")
+backtestDays    = input.int(365, "Days", minval = 30, group = groupBacktest, inline = "bt1")
+showBacktestShade = input.bool(true, "Shade Old Data", group = groupBacktest)
+
+msPerDay = 24 * 60 * 60 * 1000
+backtestStartTime = timenow - backtestDays * msPerDay
+inBacktestRange = not useLastYearOnly or time >= backtestStartTime
+bgcolor(showBacktestShade and useLastYearOnly and not inBacktestRange ? color.new(color.gray, 92) : na)
+
+//======================================
+// 01. MODE & SIGNAL
+//======================================
+signalMode = input.string("Sensitive", "Signal Mode", options = ["Conservative", "Balanced", "Sensitive", "Super Sensitive"], group = groupCore, inline = "mode")
+entryMode  = input.string("Hybrid", "Entry Mode", options = ["Momentum", "Pullback", "Hybrid"], group = groupCore, inline = "mode")
+marketMode = input.string("Spot Long Only", "Market Mode", options = ["Spot Long Only", "Futures Long & Short"], group = groupCore)
+futuresGuardMode = input.string("Balanced", "Futures Guard", options = ["Off / Legacy", "Balanced", "Strict"], group = groupCore)
+allowRealtime = input.bool(false, "Realtime Signal", group = groupCore, inline = "core")
+blockNoTrade  = input.bool(false, "Block No-Trade Entry", group = groupCore, inline = "core")
+allowShort = marketMode == "Futures Long & Short"
+
+//======================================
+// 02. MULTI TIMEFRAME CONFIRMATION
+//======================================
+useMTF          = input.bool(true, "Use MTF", group = groupMTF, inline = "mtf1")
+autoMTF         = input.bool(false, "Auto HTF", group = groupMTF, inline = "mtf1")
+mtfTF           = input.timeframe("60", "Manual HTF", group = groupMTF, inline = "mtf2")
+mtfEmaLen       = input.int(50, "HTF EMA", minval = 1, group = groupMTF, inline = "mtf2")
+useConfirmedMTF = input.bool(false, "Confirmed HTF", group = groupMTF, inline = "mtf3")
+requireHigherMTF = input.bool(true, "Require HTF > Chart", group = groupMTF, inline = "mtf3")
+
+//======================================
+// 03. RISK & POSITION SIZING
+//======================================
+// Account preset menyesuaikan tipe market.
+// Catatan: initial_capital/currency pada strategy() bersifat global.
+// Sizing di bawah memakai activeAccountSize supaya IDX, crypto, dan forex tidak dipaksa memakai satu balance yang sama.
+accountProfile = input.string("Auto", "Account Profile", options = ["Auto", "IDX Stock", "Crypto", "Forex", "Manual"], group = groupRisk, inline = "acc0")
+riskPerTrade  = input.float(1.0, "Risk %", step = 0.1, group = groupRisk, inline = "acc0")
+
+idxAccountSize    = input.float(10000000, "IDX Balance IDR", minval = 0, group = groupRisk, inline = "acc1")
+cryptoAccountSize = input.float(1000, "Crypto Balance USDT", minval = 0, group = groupRisk, inline = "acc2")
+forexAccountSize  = input.float(1000, "Forex Balance USD", minval = 0, group = groupRisk, inline = "acc3")
+manualAccountSize = input.float(10000000, "Manual Balance", minval = 0, group = groupRisk, inline = "acc4")
+
+idxLotSize    = input.int(100, "IDX Shares/Lot", minval = 1, group = groupRisk, inline = "qty1")
+cryptoQtyStep = input.float(0.000001, "Crypto Qty Step", minval = 0.00000001, group = groupRisk, inline = "qty2")
+forexLotStep  = input.float(0.01, "Forex Lot Step", minval = 0.001, group = groupRisk, inline = "qty3")
+manualQtyStep = input.float(1.0, "Manual Qty Step", minval = 0.00000001, group = groupRisk, inline = "qty4")
+
+// Risk Conversion dipakai kalau account currency beda dengan quote currency simbol.
+// Normalnya biarkan 1. Contoh: USDJPY account USD bisa pakai kira-kira 1 / harga USDJPY.
+riskConversion = input.float(1.0, "Risk Conversion", minval = 0.00000001, group = groupRisk)
+
+autoMarket = syminfo.type == "crypto" ? "Crypto" : syminfo.type == "forex" ? "Forex" : syminfo.type == "stock" and str.upper(syminfo.prefix) == "IDX" ? "IDX Stock" : "Manual"
+activeMarket = accountProfile == "Auto" ? autoMarket : accountProfile
+activeAccountSize = activeMarket == "IDX Stock" ? idxAccountSize : activeMarket == "Crypto" ? cryptoAccountSize : activeMarket == "Forex" ? forexAccountSize : manualAccountSize
+
+slMode     = input.string("Hybrid", "SL Mode", options = ["ATR", "Lowest Low", "Hybrid"], group = groupRisk, inline = "sl0")
+slLookback = input.int(10, "Lookback", minval = 2, group = groupRisk, inline = "sl1")
+atrLen     = input.int(14, "ATR Len", minval = 1, group = groupRisk, inline = "sl1")
+atrMultSL  = input.float(1.5, "ATR Mult", step = 0.1, group = groupRisk, inline = "sl1")
+useAdaptiveInitialSL = input.bool(true, "Adaptive Initial SL", group = groupRisk, inline = "sl2")
+positiveSLMult       = input.float(1, "Positive SL x", minval = 1.0, step = 0.05, group = groupRisk, inline = "sl2")
+slHuntBufferATR      = input.float(0.35, "Hunt Buffer ATR", minval = 0.0, step = 0.05, group = groupRisk, inline = "sl3")
+
+tp1RR = input.float(1.3, "TP1 RR", step = 0.1, group = groupRisk, inline = "tp")
+tp2RR = input.float(2.0, "TP2 RR", step = 0.1, group = groupRisk, inline = "tp")
+useTrailingStop = input.bool(true, "Trailing Stop", group = groupRisk, inline = "tr")
+trailPercent    = input.float(3.0, "Trail %", step = 0.1, group = groupRisk, inline = "tr")
+looseTrailOnPositive = input.bool(true, "Loose if Positive", group = groupRisk, inline = "tr2")
+positiveTrailMult    = input.float(4, "Positive Trail x", minval = 1.0, step = 0.1, group = groupRisk, inline = "tr2")
+positiveTrailScore   = input.float(60, "Positive Score", minval = 0, maxval = 100, step = 5, group = groupRisk, inline = "tr3")
+
+//======================================
+// 04. SUPERTREND FILTER
+//======================================
+showST    = input.bool(true, "Show Line", group = groupST, inline = "st1")
+stFactor  = input.float(3.0, "Factor", step = 0.1, group = groupST, inline = "st1")
+stAtrLen  = input.int(10, "ATR Len", minval = 1, group = groupST, inline = "st1")
+useSTFilter = input.bool(false, "Require ST Direction", group = groupST, inline = "st2")
+useSTExit   = input.bool(false, "Exit on Bearish", group = groupST, inline = "st2")
+
+//======================================
+// 05. SMART MONEY CONCEPT
+//======================================
+volumeLen = input.int(20, "Volume MA", minval = 1, group = groupSMC, inline = "vol")
+obVolMult = input.float(1.5, "OB Vol Mult", step = 0.1, group = groupSMC, inline = "vol")
+
+maxOBBoxes  = input.int(5, "Max OB", minval = 1, maxval = 30, group = groupSMC, inline = "box")
+maxFVGBoxes = input.int(5, "Max FVG", minval = 1, maxval = 30, group = groupSMC, inline = "box")
+boxExtend   = input.int(20, "Extend", minval = 3, maxval = 100, group = groupSMC, inline = "box")
+
+breakoutLen = input.int(20, "Breakout Len", minval = 5, group = groupSMC, inline = "br")
+pumpPercent = input.float(3.0, "Pump/Dump %", step = 0.5, group = groupSMC, inline = "pump")
+pumpVolMult = input.float(1.3, "Pump Vol", step = 0.1, group = groupSMC, inline = "pump")
+
+//======================================
+// 06. VISUAL & OBJECTS
+//======================================
+showTrendBg     = input.bool(true, "Trend BG", group = groupVisual, inline = "v1")
+showTradeLevels = input.bool(true, "Entry/SL/TP", group = groupVisual, inline = "v1")
+showEntryLabels = input.bool(true, "Entry/Exit Label", group = groupVisual, inline = "v1")
+
+showSR        = input.bool(true, "Support/Resistance", group = groupVisual, inline = "v2")
+showStructure = input.bool(true, "BOS/CHOCH", group = groupVisual, inline = "v2")
+lockSMCVisual = input.bool(true, "Lock SMC Close", group = groupVisual, inline = "v2")
+
+showOrderBlock       = input.bool(false, "Order Block", group = groupVisual, inline = "v3")
+showFVG              = input.bool(false, "FVG", group = groupVisual, inline = "v3")
+showLiquidityTargets = input.bool(true, "Liquidity", group = groupVisual, inline = "v3")
+
+showBreakoutBox = input.bool(false, "Breakout Box", group = groupVisual, inline = "v4")
+showPumpWarning = input.bool(true, "Pump/Dump Warning", group = groupVisual, inline = "v4")
+showPullbackDebug = input.bool(false, "Pullback Debug", group = groupVisual, inline = "v5")
+
+//======================================
+// 07. DIRECTION PREDICTION
+//======================================
+showDirectionPrediction = input.bool(true, "Show Prediction", group = groupPredict, inline = "pred")
+predictionBars = input.int(12, "Bars", minval = 1, maxval = 50, group = groupPredict, inline = "pred")
+predictionLen  = input.int(20, "Calc Len", minval = 5, group = groupPredict, inline = "pred")
+showPredictionTPSL = input.bool(true, "Prediction TP/SL Box", group = groupPredict, inline = "pred2")
+predictionBoxBars = input.int(20, "Box Bars", minval = 5, maxval = 100, group = groupPredict, inline = "pred2")
+
+//======================================
+// 08. DASHBOARD
+//======================================
+showTable = input.bool(true, "Show Dashboard", group = groupTable, inline = "dash")
+dashboardMode = input.string("Mini", "Mode", options = ["Mini", "Full"], group = groupTable, inline = "dash")
+dashboardPosition = input.string("Top Right", "Position", options = ["Top Right", "Top Left", "Bottom Right", "Bottom Left"], group = groupTable, inline = "dash2")
+dashboardSize = input.string("Small", "Size", options = ["Tiny", "Small", "Normal"], group = groupTable, inline = "dash2")
+
+//======================================
+// 09. ALERTS
+//======================================
+showDetailedAlerts = input.bool(false, "Enable Detailed Alerts", group = groupAlert)
+
+//======================================
+// AUTO PARAMETER BY MODE
+//======================================
+emaFastLen = signalMode == "Conservative" ? 20 : signalMode == "Balanced" ? 13 : signalMode == "Sensitive" ? 9 : 5
+emaSlowLen = signalMode == "Conservative" ? 50 : signalMode == "Balanced" ? 34 : signalMode == "Sensitive" ? 21 : 13
+rsiLen = signalMode == "Conservative" ? 14 : signalMode == "Balanced" ? 14 : signalMode == "Sensitive" ? 10 : 7
+rsiBuyLevel = signalMode == "Conservative" ? 50 : signalMode == "Balanced" ? 48 : signalMode == "Sensitive" ? 45 : 40
+rsiSellLevel = signalMode == "Conservative" ? 50 : signalMode == "Balanced" ? 48 : signalMode == "Sensitive" ? 45 : 42
+macdFastLen = signalMode == "Conservative" ? 12 : signalMode == "Balanced" ? 10 : signalMode == "Sensitive" ? 8 : 6
+macdSlowLen = signalMode == "Conservative" ? 26 : signalMode == "Balanced" ? 21 : signalMode == "Sensitive" ? 17 : 13
+macdSignalLen = signalMode == "Conservative" ? 9 : signalMode == "Balanced" ? 7 : signalMode == "Sensitive" ? 5 : 4
+volumeMultiplier = signalMode == "Conservative" ? 1.00 : signalMode == "Balanced" ? 0.90 : signalMode == "Sensitive" ? 0.80 : 0.60
+swingLen = signalMode == "Conservative" ? 5 : signalMode == "Balanced" ? 4 : signalMode == "Sensitive" ? 3 : 2
+
+//======================================
+// HELPER FUNCTIONS
+//======================================
+f_price(_value) =>
+    str.tostring(_value, format.mintick)
+
+f_target(_entry, _sl, _rr) =>
+    _entry + ((_entry - _sl) * _rr)
+
+f_target_short(_entry, _sl, _rr) =>
+    _entry - ((_sl - _entry) * _rr)
+
+f_pct(_value) =>
+    na(_value) ? "No Data" : str.tostring(_value, "#.##") + "%"
+
+f_signed_pct(_value) =>
+    na(_value) ? "-" : (_value > 0 ? "+" : "") + str.tostring(_value, "#.##") + "%"
+
+f_money(_value) =>
+    na(_value) ? "-" : (_value > 0 ? "+" : "") + str.tostring(_value, "#.##")
+
+f_num(_value) =>
+    na(_value) ? "No Data" : str.tostring(_value, "#")
+
+f_round_down_step(_value, _step) =>
+    na(_value) or _step <= 0 ? na : math.floor(_value / _step) * _step
+
+f_qty_step() =>
+    activeMarket == "IDX Stock" ? float(idxLotSize) : activeMarket == "Crypto" ? cryptoQtyStep : activeMarket == "Forex" ? forexLotStep : manualQtyStep
+
+f_calc_qty(_entry, _sl) =>
+    _priceRisk = math.abs(_entry - _sl)
+    _pointValue = syminfo.pointvalue > 0 ? syminfo.pointvalue : 1.0
+    _riskCash = activeAccountSize * (riskPerTrade / 100)
+    _riskPerQty = _priceRisk * _pointValue * riskConversion
+    _rawQty = _riskPerQty > 0 ? _riskCash / _riskPerQty : na
+    f_round_down_step(_rawQty, f_qty_step())
+
+f_qty_text(_qty) =>
+    na(_qty) ? "No Data" : activeMarket == "IDX Stock" ? str.tostring(_qty / idxLotSize, "#") + " lot / " + str.tostring(_qty, "#") + " sh" : activeMarket == "Crypto" ? str.tostring(_qty, "#.########") + " coin" : activeMarket == "Forex" ? str.tostring(_qty, "#.###") + " lot" : str.tostring(_qty, "#.####")
+
+//======================================
+// CORE INDICATORS & SUPERTREND
+//======================================
+emaFast = ta.ema(close, emaFastLen)
+emaSlow = ta.ema(close, emaSlowLen)
+rsiValue = ta.rsi(close, rsiLen)
+[macdLine, macdSignal, macdHist] = ta.macd(close, macdFastLen, macdSlowLen, macdSignalLen)
+volAvg = ta.sma(volume, volumeLen)
+atrValue = ta.atr(atrLen)
+
+[stValue, stDirection] = ta.supertrend(stFactor, stAtrLen)
+stBullish = stDirection < 0
+stBearish = stDirection > 0
+
+//======================================
+// SWING STRUCTURE
+//======================================
+pivotLowRaw = ta.pivotlow(low, swingLen, swingLen)
+pivotHighRaw = ta.pivothigh(high, swingLen, swingLen)
+
+var float lastSwingLow = na
+var float lastSwingHigh = na
+
+if not na(pivotLowRaw)
+    lastSwingLow := pivotLowRaw
+
+if not na(pivotHighRaw)
+    lastSwingHigh := pivotHighRaw
+
+//======================================
+// TREND & BACKGROUND & PLOTS
+//======================================
+bullishTrend = close > emaFast and emaFast > emaSlow
+bearishTrend = close < emaFast and emaFast < emaSlow
+bgColor = showTrendBg ? bullishTrend ? color.new(color.green, 90) : bearishTrend ? color.new(color.red, 90) : na : na
+bgcolor(bgColor)
+
+plot(emaFast, "EMA Fast", color = color.yellow, linewidth = 2)
+plot(emaSlow, "EMA Slow", color = color.blue, linewidth = 2)
+
+stColor = stBullish ? color.new(color.lime, 0) : color.new(color.red, 0)
+plot(showST ? stValue : na, "Supertrend", color = stColor, linewidth = 2, style = plot.style_linebr)
+
+//======================================
+// MULTI TIMEFRAME CONFIRMATION - AUTO ADAPTIVE & CONFIRMED
+//======================================
+// Auto HTF mengikuti timeframe chart agar konfirmasi selalu berasal dari timeframe yang lebih tinggi.
+// Default compatibility: Auto HTF OFF dan Confirmed HTF OFF supaya backtest TF 15m mendekati perilaku versi lama.
+// Nyalakan Confirmed HTF jika ingin filter lebih aman dari repaint/intrabar flip, tetapi sinyal bisa lebih telat.
+chartSec = timeframe.in_seconds(timeframe.period)
+autoHTF =
+     chartSec <= 60      ? "5"   :
+     chartSec <= 300     ? "15"  :
+     chartSec <= 900     ? "60"  :
+     chartSec <= 1800    ? "120" :
+     chartSec <= 3600    ? "240" :
+     chartSec <= 14400   ? "D"   :
+     chartSec <= 86400   ? "W"   : "M"
+
+manualMtfSec = timeframe.in_seconds(mtfTF)
+manualMtfInvalid = useMTF and requireHigherMTF and not autoMTF and not na(manualMtfSec) and manualMtfSec <= chartSec
+// Compatibility behavior:
+// - Jika manual HTF masih valid, tetap pakai manual HTF supaya hasil TF 15m/30m tidak berubah jauh.
+// - Jika manual HTF invalid pada chart TF besar, otomatis fallback ke autoHTF agar sinyal tidak terblokir.
+activeMtfTF = autoMTF or manualMtfInvalid ? autoHTF : mtfTF
+activeMtfSec = timeframe.in_seconds(activeMtfTF)
+mtfIsHigher = not na(activeMtfSec) and activeMtfSec > chartSec
+mtfTimeframeOk = not useMTF or not requireHigherMTF or mtfIsHigher
+
+mtfClose = request.security(syminfo.tickerid, activeMtfTF, useConfirmedMTF ? close[1] : close, barmerge.gaps_off, barmerge.lookahead_off)
+mtfEMA = request.security(syminfo.tickerid, activeMtfTF, useConfirmedMTF ? ta.ema(close, mtfEmaLen)[1] : ta.ema(close, mtfEmaLen), barmerge.gaps_off, barmerge.lookahead_off)
+mtfBullRaw = mtfClose > mtfEMA
+mtfBearRaw = mtfClose < mtfEMA
+mtfBull = useMTF and mtfTimeframeOk and mtfBullRaw
+mtfBear = useMTF and mtfTimeframeOk and mtfBearRaw
+
+//======================================
+// NO TRADE ZONE
+//======================================
+atrPercent = atrValue / close * 100
+lowVolatility = atrPercent < 1.0
+sidewaysMarket = math.abs(emaFast - emaSlow) / close * 100 < 0.5
+lowVolumeMarket = volume < volAvg * 0.7
+noTradeZone = lowVolatility or sidewaysMarket or lowVolumeMarket
+bgcolor(noTradeZone ? color.new(color.gray, 94) : na)
+
+//======================================
+// BREAKOUT BOX
+//======================================
+highestBox = ta.highest(high, breakoutLen)
+lowestBox = ta.lowest(low, breakoutLen)
+breakoutUp = close > highestBox[1]
+breakoutDown = close < lowestBox[1]
+
+var box breakoutBox = na
+
+if showBreakoutBox and barstate.islast
+    if not na(breakoutBox)
+        box.delete(breakoutBox)
+    breakoutBox := box.new(left = bar_index - breakoutLen, top = highestBox, right = bar_index, bottom = lowestBox, bgcolor = color.new(color.blue, 92), border_color = color.new(color.blue, 40))
+
+//======================================
+// FAIR VALUE GAP CONDITIONS - SAFE VISUAL
+//======================================
+enoughBarsForFVG = bar_index >= 2 and not na(high[2]) and not na(low[2])
+fvgVisualOk = lockSMCVisual ? barstate.isconfirmed : true
+
+bullishFVG = enoughBarsForFVG and low > high[2]
+bearishFVG = enoughBarsForFVG and high < low[2]
+
+var box[] bullFVGBoxes = array.new_box()
+var box[] bearFVGBoxes = array.new_box()
+
+if showFVG and fvgVisualOk and bullishFVG
+    bullFvgBox = box.new(left = bar_index - 2, top = low, right = bar_index + boxExtend, bottom = high[2], xloc = xloc.bar_index, bgcolor = color.new(color.lime, 90), border_color = color.new(color.lime, 40))
+    array.push(bullFVGBoxes, bullFvgBox)
+    if array.size(bullFVGBoxes) > maxFVGBoxes
+        oldBullFvgBox = array.shift(bullFVGBoxes)
+        box.delete(oldBullFvgBox)
+
+if showFVG and fvgVisualOk and bearishFVG
+    bearFvgBox = box.new(left = bar_index - 2, top = low[2], right = bar_index + boxExtend, bottom = high, xloc = xloc.bar_index, bgcolor = color.new(color.red, 90), border_color = color.new(color.red, 40))
+    array.push(bearFVGBoxes, bearFvgBox)
+    if array.size(bearFVGBoxes) > maxFVGBoxes
+        oldBearFvgBox = array.shift(bearFVGBoxes)
+        box.delete(oldBearFvgBox)
+
+// FVG mitigation - safe reverse indexing
+bullFVGSize = array.size(bullFVGBoxes)
+if bullFVGSize > 0
+    for j = 0 to bullFVGSize - 1
+        i = bullFVGSize - 1 - j
+        b = array.get(bullFVGBoxes, i)
+        box.set_right(b, bar_index + boxExtend)
+        if low <= box.get_bottom(b)
+            box.delete(b)
+            array.remove(bullFVGBoxes, i)
+
+bearFVGSize = array.size(bearFVGBoxes)
+if bearFVGSize > 0
+    for j = 0 to bearFVGSize - 1
+        i = bearFVGSize - 1 - j
+        b = array.get(bearFVGBoxes, i)
+        box.set_right(b, bar_index + boxExtend)
+        if high >= box.get_top(b)
+            box.delete(b)
+            array.remove(bearFVGBoxes, i)
+
+//======================================
+// SMART MONEY & ORDER BLOCK
+//======================================
+volumeOk = not na(volAvg) and volume >= volAvg * volumeMultiplier
+volumeSpike = not na(volAvg) and volume > volAvg * obVolMult
+bigVolume = not na(volAvg) and volume > volAvg * 2
+
+strongBullCandle = close > open and close > high[1]
+strongBearCandle = close < open and close < low[1]
+
+smartMoneyBuy = bigVolume and strongBullCandle and close > emaFast
+smartMoneySell = bigVolume and strongBearCandle and close < emaFast
+
+bullishOB = volumeSpike and bullishFVG and close > high[1] and open[1] > close[1]
+bearishOB = volumeSpike and bearishFVG and close < low[1] and open[1] < close[1]
+
+var box[] bullOBBoxes = array.new_box()
+var box[] bearOBBoxes = array.new_box()
+
+if showOrderBlock and bullishOB
+    obBox = box.new(left = bar_index[1], top = high[1], right = bar_index + boxExtend, bottom = low[1], bgcolor = color.new(color.green, 85), border_color = color.new(color.green, 25))
+    array.push(bullOBBoxes, obBox)
+    if array.size(bullOBBoxes) > maxOBBoxes
+        oldBox = array.shift(bullOBBoxes)
+        box.delete(oldBox)
+
+if showOrderBlock and bearishOB
+    obBox = box.new(left = bar_index[1], top = high[1], right = bar_index + boxExtend, bottom = low[1], bgcolor = color.new(color.red, 85), border_color = color.new(color.red, 25))
+    array.push(bearOBBoxes, obBox)
+    if array.size(bearOBBoxes) > maxOBBoxes
+        oldBox = array.shift(bearOBBoxes)
+        box.delete(oldBox)
+
+// OB mitigation
+bullOBSize = array.size(bullOBBoxes)
+if bullOBSize > 0
+    for j = 0 to bullOBSize - 1
+        i = bullOBSize - 1 - j
+        b = array.get(bullOBBoxes, i)
+        box.set_right(b, bar_index + boxExtend)
+        if low <= box.get_top(b)
+            box.delete(b)
+            array.remove(bullOBBoxes, i)
+
+bearOBSize = array.size(bearOBBoxes)
+if bearOBSize > 0
+    for j = 0 to bearOBSize - 1
+        i = bearOBSize - 1 - j
+        b = array.get(bearOBBoxes, i)
+        box.set_right(b, bar_index + boxExtend)
+        if high >= box.get_bottom(b)
+            box.delete(b)
+            array.remove(bearOBBoxes, i)
+
+//======================================
+// MARKET STRUCTURE
+//======================================
+bosBull = not na(lastSwingHigh) and close > lastSwingHigh
+bosBear = not na(lastSwingLow) and close < lastSwingLow
+chochBull = bearishTrend[1] and bullishTrend
+chochBear = bullishTrend[1] and bearishTrend
+
+//======================================
+// LIQUIDITY SWEEP
+//======================================
+liquiditySweepHigh = high > high[1] and close < high[1]
+liquiditySweepLow = low < low[1] and close > low[1]
+
+//======================================
+// ADAPTIVE STOP LOSS - LONG & SHORT
+//======================================
+// Base SL mengikuti mode lama. Untuk Hybrid, base tetap lebih responsif/mepet.
+baseSlByATR = close - atrValue * atrMultSL
+baseSlByLowest = ta.lowest(low, slLookback)
+baseInitialSL = slMode == "ATR" ? baseSlByATR : slMode == "Lowest Low" ? baseSlByLowest : math.max(baseSlByATR, baseSlByLowest)
+
+baseShortSlByATR = close + atrValue * atrMultSL
+baseShortSlByHighest = ta.highest(high, slLookback)
+baseInitialSLShort = slMode == "ATR" ? baseShortSlByATR : slMode == "Lowest Low" ? baseShortSlByHighest : math.min(baseShortSlByATR, baseShortSlByHighest)
+
+// Anti stop-hunt buffer. Saat bias masih positif, SL diletakkan lebih jauh
+// di luar swing/liquidity area agar tidak terlalu mudah kena sapu wick.
+adaptiveSLPositiveLong = bullishTrend or (close > emaFast and macdLine > macdSignal and volumeOk and (not useMTF or mtfBull)) or (stBullish and close > emaFast) or liquiditySweepLow
+adaptiveSLPositiveShort = bearishTrend or (close < emaFast and macdLine < macdSignal and volumeOk and (not useMTF or mtfBear)) or (stBearish and close < emaFast) or liquiditySweepHigh
+
+longLiquidityRef = not na(lastSwingLow) and lastSwingLow < close ? lastSwingLow : baseSlByLowest
+longHuntSL = longLiquidityRef - atrValue * slHuntBufferATR
+longWideATRSL = close - atrValue * atrMultSL * positiveSLMult
+adaptiveLongSL = slMode == "ATR" ? longWideATRSL : slMode == "Lowest Low" ? longHuntSL : math.min(longWideATRSL, longHuntSL)
+
+shortLiquidityRef = not na(lastSwingHigh) and lastSwingHigh > close ? lastSwingHigh : baseShortSlByHighest
+shortHuntSL = shortLiquidityRef + atrValue * slHuntBufferATR
+shortWideATRSL = close + atrValue * atrMultSL * positiveSLMult
+adaptiveShortSL = slMode == "ATR" ? shortWideATRSL : slMode == "Lowest Low" ? shortHuntSL : math.max(shortWideATRSL, shortHuntSL)
+
+initialSL = useAdaptiveInitialSL and adaptiveSLPositiveLong ? adaptiveLongSL : baseInitialSL
+validRisk = not na(initialSL) and initialSL < close and close - initialSL > syminfo.mintick
+
+initialSLShort = useAdaptiveInitialSL and adaptiveSLPositiveShort ? adaptiveShortSL : baseInitialSLShort
+validShortRisk = not na(initialSLShort) and initialSLShort > close and initialSLShort - close > syminfo.mintick
+
+//======================================
+// CANDLE REVERSAL FOR PULLBACK ENTRY
+//======================================
+body = math.abs(close - open)
+upperWick = high - math.max(open, close)
+lowerWick = math.min(open, close) - low
+bullishPinbar = close > open and lowerWick > body * 1.5 and upperWick < body * 1.2
+bullishEngulfing = close > open and close[1] < open[1] and close > open[1] and open <= close[1]
+bullishReversal = bullishPinbar or bullishEngulfing
+
+bearishPinbar = close < open and upperWick > body * 1.5 and lowerWick < body * 1.2
+bearishEngulfing = close < open and close[1] > open[1] and close < open[1] and open >= close[1]
+bearishReversal = bearishPinbar or bearishEngulfing
+
+//======================================
+// ENTRY LOGIC - LONG & SHORT
+//======================================
+confirmFilter = allowRealtime ? true : barstate.isconfirmed
+smcVisualOk = lockSMCVisual ? barstate.isconfirmed : true
+macdCrossBuy = ta.crossover(macdLine, macdSignal)
+macdCrossSell = ta.crossunder(macdLine, macdSignal)
+macdMomentumUp = macdHist > macdHist[1]
+macdMomentumDown = macdHist < macdHist[1]
+
+// Long setup
+earlyBuy = close > emaFast and rsiValue > rsiBuyLevel and macdMomentumUp and volumeOk
+momentumBuy = close > emaFast and emaFast > emaSlow and rsiValue > rsiBuyLevel and macdLine > macdSignal and volumeOk and validRisk
+superSensitiveBuy = signalMode == "Super Sensitive" and (ta.crossover(close, emaFast) or macdCrossBuy or earlyBuy or breakoutUp) and validRisk
+
+// Pullback Long - lebih fleksibel agar Hybrid tidak cuma mengandalkan momentum
+pullbackTouchEMA = low <= emaFast or low <= emaSlow or ta.lowest(low, 3) <= emaFast
+pullbackTrendOk = emaFast > emaSlow and close > emaSlow
+pullbackRSIOk = rsiValue > 35 and rsiValue < 60
+pullbackBounceOk = close > emaFast or ta.crossover(close, emaFast) or close > high[1]
+pullbackMacdOk = macdHist > macdHist[1] or macdLine > macdSignal
+pullbackCandleOk = bullishReversal or close > open or close > high[1]
+pullbackBuy = pullbackTrendOk and pullbackTouchEMA and pullbackRSIOk and pullbackBounceOk and pullbackMacdOk and pullbackCandleOk and volumeOk and validRisk
+
+// Short setup - aktif hanya saat Market Mode = Futures Long & Short
+earlySell = close < emaFast and rsiValue < rsiSellLevel and macdMomentumDown and volumeOk
+momentumSell = close < emaFast and emaFast < emaSlow and rsiValue < rsiSellLevel and macdLine < macdSignal and volumeOk and validShortRisk
+superSensitiveSell = signalMode == "Super Sensitive" and (ta.crossunder(close, emaFast) or macdCrossSell or earlySell or breakoutDown) and validShortRisk
+
+// Pullback Short - lebih fleksibel agar Hybrid futures bisa entry dari rejection EMA
+pullbackTouchEMAShort = high >= emaFast or high >= emaSlow or ta.highest(high, 3) >= emaFast
+pullbackTrendShortOk = emaFast < emaSlow and close < emaSlow
+pullbackRSIShortOk = rsiValue < 65 and rsiValue > 40
+pullbackRejectOk = close < emaFast or ta.crossunder(close, emaFast) or close < low[1]
+pullbackMacdShortOk = macdHist < macdHist[1] or macdLine < macdSignal
+pullbackCandleShortOk = bearishReversal or close < open or close < low[1]
+pullbackSell = pullbackTrendShortOk and pullbackTouchEMAShort and pullbackRSIShortOk and pullbackRejectOk and pullbackMacdShortOk and pullbackCandleShortOk and volumeOk and validShortRisk
+
+//======================================
+// SCORE ENGINE - LONG & SHORT
+//======================================
+score = 0.0
+score += close > emaFast ? 10 : 0
+score += emaFast > emaSlow ? 10 : 0
+score += rsiValue > rsiBuyLevel ? 10 : 0
+score += macdLine > macdSignal ? 10 : 0
+score += volumeOk ? 10 : 0
+score += useMTF and mtfBull ? 15 : 0
+score += smartMoneyBuy ? 10 : 0
+score += bosBull ? 8 : 0
+score += pullbackBuy ? 7 : 0
+score += stBullish ? 10 : 0
+score := math.min(score, 100)
+
+shortScore = 0.0
+shortScore += close < emaFast ? 10 : 0
+shortScore += emaFast < emaSlow ? 10 : 0
+shortScore += rsiValue < rsiSellLevel ? 10 : 0
+shortScore += macdLine < macdSignal ? 10 : 0
+shortScore += volumeOk ? 10 : 0
+shortScore += useMTF and mtfBear ? 15 : 0
+shortScore += smartMoneySell ? 10 : 0
+shortScore += bosBear ? 8 : 0
+shortScore += pullbackSell ? 7 : 0
+shortScore += stBearish ? 10 : 0
+shortScore := math.min(shortScore, 100)
+
+entryRating = score >= 85 ? "A+ Strong Buy" : score >= 70 ? "A Buy" : score >= 55 ? "B Watch" : score >= 40 ? "C Weak" : "D Avoid"
+longRating = score >= 85 ? "A+ Strong Long" : score >= 70 ? "A Long" : score >= 55 ? "B Watch" : score >= 40 ? "C Weak" : "D Avoid"
+shortRating = shortScore >= 85 ? "A+ Strong Short" : shortScore >= 70 ? "A Short" : shortScore >= 55 ? "B Watch" : shortScore >= 40 ? "C Weak" : "D Avoid"
+trendStrength = math.abs(emaFast - emaSlow) / close * 100
+trendText = trendStrength > 3 ? "Strong" : trendStrength > 1.5 ? "Medium" : "Weak"
+
+mtfFilterOk = useMTF ? mtfBull : true
+mtfShortFilterOk = useMTF ? mtfBear : true
+noTradeFilterOk = blockNoTrade ? not noTradeZone : true
+stFilterOk = useSTFilter ? stBullish : true
+stShortFilterOk = useSTFilter ? stBearish : true
+
+// Futures Guard: short dibuat lebih selektif agar mode futures tidak over-short saat market masih kuat naik.
+// Off / Legacy = perilaku short lama. Balanced = default aman. Strict = sangat selektif untuk market yang sering trending naik.
+futuresShortGuardOk = not allowShort ? false : futuresGuardMode == "Off / Legacy" ? true : futuresGuardMode == "Balanced" ? bearishTrend and (not useMTF or mtfBear) and macdLine < macdSignal and rsiValue < 50 and shortScore >= math.max(score + 5, 60) : bearishTrend and (not useMTF or mtfBear) and stBearish and macdLine < macdSignal and rsiValue < 45 and shortScore >= math.max(score + 10, 70) and (bosBear or smartMoneySell or breakoutDown)
+
+// Gate entry dipisah per mode.
+// Tujuannya: Pullback tidak dipaksa lolos standar Momentum yang terlalu ketat.
+momentumBuyGate = momentumBuy and mtfFilterOk and score >= 55 and noTradeFilterOk and stFilterOk
+pullbackBuyGate = pullbackBuy and mtfFilterOk and score >= 45 and noTradeFilterOk and stFilterOk
+superSensitiveBuyGate = superSensitiveBuy and mtfFilterOk and score >= 45 and noTradeFilterOk and stFilterOk
+
+momentumSellGate = allowShort and futuresShortGuardOk and momentumSell and mtfShortFilterOk and shortScore >= 55 and noTradeFilterOk and stShortFilterOk
+pullbackSellGate = allowShort and futuresShortGuardOk and pullbackSell and mtfShortFilterOk and shortScore >= 45 and noTradeFilterOk and stShortFilterOk
+superSensitiveSellGate = allowShort and futuresShortGuardOk and superSensitiveSell and mtfShortFilterOk and shortScore >= 45 and noTradeFilterOk and stShortFilterOk
+
+premiumBuyOk = entryMode == "Momentum" ? momentumBuyGate : entryMode == "Pullback" ? pullbackBuyGate : momentumBuyGate or pullbackBuyGate or superSensitiveBuyGate
+premiumSellOk = entryMode == "Momentum" ? momentumSellGate : entryMode == "Pullback" ? pullbackSellGate : momentumSellGate or pullbackSellGate or superSensitiveSellGate
+
+//======================================
+// TRADE STATE
+//======================================
+var bool inTrade = false
+var int tradeSide = 0  // 1 = Long, -1 = Short, 0 = Flat
+var float entryPrice = na
+var float stopLoss = na
+var float takeProfit1 = na
+var float takeProfit2 = na
+var float trailingSL = na
+var int entryBar = na
+
+var line entryLine = na
+var line slLine = na
+var line tp1Line = na
+var line tp2Line = na
+var line trailLine = na
+var line supportLine = na
+var line resistanceLine = na
+var line liquidityHighLine = na
+var line liquidityLowLine = na
+
+var label buyLbl = na
+var label sellLbl = na
+var label liquidityHighLbl = na
+var label liquidityLowLbl = na
+
+var line directionLine = na
+var line directionUpperLine = na
+var line directionLowerLine = na
+var label directionLbl = na
+
+var line predictionEntryLine = na
+var line predictionSLLine = na
+var line predictionTP1Line = na
+var line predictionTP2Line = na
+var box predictionRiskBox = na
+var box predictionRewardBox = na
+
+tradeWasActive = inTrade
+isLongTrade = inTrade and tradeSide == 1
+isShortTrade = inTrade and tradeSide == -1
+buySignal = inBacktestRange and confirmFilter and premiumBuyOk and not tradeWasActive
+shortSignal = inBacktestRange and confirmFilter and premiumSellOk and not tradeWasActive
+
+// Adaptive trailing stop.
+// Saat bias/action masih positif, jarak trailing diperlebar agar posisi tidak terlalu cepat kena trailing SL.
+positiveLongBias = score >= positiveTrailScore or (bullishTrend and macdLine > macdSignal and (not useMTF or mtfBull)) or (stBullish and close > emaFast)
+positiveShortBias = shortScore >= positiveTrailScore or (bearishTrend and macdLine < macdSignal and (not useMTF or mtfBear)) or (stBearish and close < emaFast)
+activeTrailPercent = looseTrailOnPositive and ((tradeSide == 1 and positiveLongBias) or (tradeSide == -1 and positiveShortBias)) ? trailPercent * positiveTrailMult : trailPercent
+entryTrailPercentLong = looseTrailOnPositive and positiveLongBias ? trailPercent * positiveTrailMult : trailPercent
+entryTrailPercentShort = looseTrailOnPositive and positiveShortBias ? trailPercent * positiveTrailMult : trailPercent
+
+//======================================
+// EXIT LOGIC - LONG & SHORT
+//======================================
+canCheckTargets = tradeWasActive and not na(entryBar) and bar_index > entryBar
+
+if useTrailingStop and inTrade
+    if tradeSide == 1
+        newTrailLong = close * (1 - activeTrailPercent / 100)
+        trailingSL := na(trailingSL) ? newTrailLong : math.max(trailingSL, newTrailLong)
+    if tradeSide == -1
+        newTrailShort = close * (1 + activeTrailPercent / 100)
+        trailingSL := na(trailingSL) ? newTrailShort : math.min(trailingSL, newTrailShort)
+
+slHitLong = canCheckTargets and tradeSide == 1 and low <= stopLoss
+trailHitLong = useTrailingStop and canCheckTargets and tradeSide == 1 and not na(trailingSL) and low <= trailingSL
+tp2HitLong = canCheckTargets and tradeSide == 1 and high >= takeProfit2 and not slHitLong and not trailHitLong
+tp1HitLong = canCheckTargets and tradeSide == 1 and high >= takeProfit1 and not slHitLong and not trailHitLong and not tp2HitLong
+
+slHitShort = canCheckTargets and tradeSide == -1 and high >= stopLoss
+trailHitShort = useTrailingStop and canCheckTargets and tradeSide == -1 and not na(trailingSL) and high >= trailingSL
+tp2HitShort = canCheckTargets and tradeSide == -1 and low <= takeProfit2 and not slHitShort and not trailHitShort
+tp1HitShort = canCheckTargets and tradeSide == -1 and low <= takeProfit1 and not slHitShort and not trailHitShort and not tp2HitShort
+
+slHit = slHitLong or slHitShort
+trailHit = trailHitLong or trailHitShort
+tp2Hit = tp2HitLong or tp2HitShort
+tp1Hit = tp1HitLong or tp1HitShort
+
+sellBySignal = tradeWasActive and tradeSide == 1 and confirmFilter and close < emaFast and rsiValue < rsiSellLevel and macdMomentumDown
+coverBySignal = tradeWasActive and tradeSide == -1 and confirmFilter and close > emaFast and rsiValue > rsiBuyLevel and macdMomentumUp
+stExitSignalLong = useSTExit and tradeWasActive and tradeSide == 1 and confirmFilter and stBearish and stBullish[1]
+stExitSignalShort = useSTExit and tradeWasActive and tradeSide == -1 and confirmFilter and stBullish and stBearish[1]
+stExitSignal = stExitSignalLong or stExitSignalShort
+sellSignal = slHit or trailHit or tp1Hit or tp2Hit or sellBySignal or coverBySignal or stExitSignal
+
+//======================================
+// STRATEGY EXECUTION & HANDLE EXIT
+//======================================
+if tradeWasActive and sellSignal
+    exitReason = slHit ? "SL Hit" : trailHit ? "Trailing SL Hit" : tp2Hit ? "TP2 Hit" : tp1Hit ? "TP1 Hit" : stExitSignal ? "ST Exit" : tradeSide == 1 ? (allowShort ? "Exit Long Signal" : "Sell Signal") : "Exit Short Signal"
+    exitOrderId = tradeSide == 1 ? "Long" : "Short"
+
+    // CLOSE STRATEGY POSITION
+    strategy.close(exitOrderId, comment = exitReason)
+
+    color exitLabelColor = color.red
+    color exitLabelTextColor = color.white
+
+    if slHit or trailHit
+        exitLabelColor := color.orange
+    else if tp1Hit or tp2Hit
+        exitLabelColor := color.blue
+
+    if showEntryLabels
+        if tradeSide == 1
+            exitLongText = allowShort ? "EXIT LONG" : "SELL"
+            sellLbl := label.new(bar_index, high, exitLongText + "\nPrice: " + f_price(close) + "\nReason: " + exitReason, yloc = yloc.abovebar, style = label.style_label_down, color = exitLabelColor, textcolor = exitLabelTextColor, size = size.small)
+
+        else if tradeSide == -1
+            sellLbl := label.new(bar_index, low, "EXIT SHORT\nPrice: " + f_price(close) + "\nReason: " + exitReason, yloc = yloc.belowbar, style = label.style_label_up, color = exitLabelColor, textcolor = exitLabelTextColor, size = size.small)
+
+    inTrade := false
+    tradeSide := 0
+    entryBar := na
+    trailingSL := na
+
+//======================================
+// STRATEGY EXECUTION & HANDLE LONG ENTRY
+//======================================
+if buySignal
+    if not na(entryLine)
+        line.delete(entryLine)
+    if not na(slLine)
+        line.delete(slLine)
+    if not na(tp1Line)
+        line.delete(tp1Line)
+    if not na(tp2Line)
+        line.delete(tp2Line)
+    if not na(trailLine)
+        line.delete(trailLine)
+
+    entryPrice := close
+    stopLoss := initialSL
+    takeProfit1 := f_target(entryPrice, stopLoss, tp1RR)
+    takeProfit2 := f_target(entryPrice, stopLoss, tp2RR)
+    trailingSL := close * (1 - entryTrailPercentLong / 100)
+    entryBar := bar_index
+
+    // CALC RISK FOR STRATEGY EXECUTION
+    // IDX dibulatkan ke kelipatan 100 saham, crypto boleh pecahan, forex mengikuti lot step.
+    positionSizeLong = f_calc_qty(entryPrice, stopLoss)
+
+    // ENTER STRATEGY POSITION
+    if not na(positionSizeLong) and positionSizeLong > 0
+        inTrade := true
+        tradeSide := 1
+        strategy.entry("Long", strategy.long, qty = positionSizeLong)
+
+        if showTradeLevels
+            entryLine := line.new(bar_index, entryPrice, bar_index, entryPrice, color = color.green, width = 2)
+            slLine := line.new(bar_index, stopLoss, bar_index, stopLoss, color = color.red, width = 2)
+            tp1Line := line.new(bar_index, takeProfit1, bar_index, takeProfit1, color = color.orange, width = 2)
+            tp2Line := line.new(bar_index, takeProfit2, bar_index, takeProfit2, color = color.aqua, width = 2)
+            if useTrailingStop
+                trailLine := line.new(bar_index, trailingSL, bar_index, trailingSL, color = color.purple, width = 2)
+
+        if showEntryLabels
+            longEntryText = allowShort ? "LONG ENTRY" : "BUY"
+            buyLbl := label.new(bar_index, low, longEntryText + "\nEntry: " + f_price(entryPrice) + "\nSL: " + f_price(stopLoss) + "\nTP1: " + f_price(takeProfit1) + "\nTP2: " + f_price(takeProfit2), yloc = yloc.belowbar, style = label.style_label_up, color = color.green, textcolor = color.white, size = size.small)
+
+//======================================
+// STRATEGY EXECUTION & HANDLE SHORT ENTRY
+//======================================
+if shortSignal
+    if not na(entryLine)
+        line.delete(entryLine)
+    if not na(slLine)
+        line.delete(slLine)
+    if not na(tp1Line)
+        line.delete(tp1Line)
+    if not na(tp2Line)
+        line.delete(tp2Line)
+    if not na(trailLine)
+        line.delete(trailLine)
+
+    entryPrice := close
+    stopLoss := initialSLShort
+    takeProfit1 := f_target_short(entryPrice, stopLoss, tp1RR)
+    takeProfit2 := f_target_short(entryPrice, stopLoss, tp2RR)
+    trailingSL := close * (1 + entryTrailPercentShort / 100)
+    entryBar := bar_index
+
+    // CALC RISK FOR STRATEGY EXECUTION
+    // IDX dibulatkan ke kelipatan 100 saham, crypto boleh pecahan, forex mengikuti lot step.
+    positionSizeShort = f_calc_qty(entryPrice, stopLoss)
+
+    // ENTER STRATEGY POSITION
+    if not na(positionSizeShort) and positionSizeShort > 0
+        inTrade := true
+        tradeSide := -1
+        strategy.entry("Short", strategy.short, qty = positionSizeShort)
+
+        if showTradeLevels
+            entryLine := line.new(bar_index, entryPrice, bar_index, entryPrice, color = color.red, width = 2)
+            slLine := line.new(bar_index, stopLoss, bar_index, stopLoss, color = color.orange, width = 2)
+            tp1Line := line.new(bar_index, takeProfit1, bar_index, takeProfit1, color = color.aqua, width = 2)
+            tp2Line := line.new(bar_index, takeProfit2, bar_index, takeProfit2, color = color.lime, width = 2)
+            if useTrailingStop
+                trailLine := line.new(bar_index, trailingSL, bar_index, trailingSL, color = color.purple, width = 2)
+
+        if showEntryLabels
+            buyLbl := label.new(bar_index, high, "SHORT ENTRY\nEntry: " + f_price(entryPrice) + "\nSL: " + f_price(stopLoss) + "\nTP1: " + f_price(takeProfit1) + "\nTP2: " + f_price(takeProfit2), yloc = yloc.abovebar, style = label.style_label_down, color = color.red, textcolor = color.white, size = size.small)
+
+//======================================
+// UPDATE TRADE LEVELS
+//======================================
+if inTrade and showTradeLevels
+    if not na(entryLine)
+        line.set_xy2(entryLine, bar_index, entryPrice)
+    if not na(slLine)
+        line.set_xy2(slLine, bar_index, stopLoss)
+    if not na(tp1Line)
+        line.set_xy2(tp1Line, bar_index, takeProfit1)
+    if not na(tp2Line)
+        line.set_xy2(tp2Line, bar_index, takeProfit2)
+    if useTrailingStop and not na(trailLine)
+        line.set_xy2(trailLine, bar_index, trailingSL)
+
+//======================================
+// SUPPORT RESISTANCE
+//======================================
+if showSR and not na(lastSwingLow) and barstate.islast
+    if not na(supportLine)
+        line.delete(supportLine)
+    supportLine := line.new(bar_index - 30, lastSwingLow, bar_index + 20, lastSwingLow, xloc = xloc.bar_index, color = color.new(color.green, 30), width = 2, style = line.style_dotted)
+
+if showSR and not na(lastSwingHigh) and barstate.islast
+    if not na(resistanceLine)
+        line.delete(resistanceLine)
+    resistanceLine := line.new(bar_index - 30, lastSwingHigh, bar_index + 20, lastSwingHigh, xloc = xloc.bar_index, color = color.new(color.red, 30), width = 2, style = line.style_dotted)
+
+//======================================
+// LIQUIDITY TARGETS
+//======================================
+liqHigh = not na(lastSwingHigh) ? lastSwingHigh : ta.highest(high, 50)
+liqLow = not na(lastSwingLow) ? lastSwingLow : ta.lowest(low, 50)
+
+if showLiquidityTargets and barstate.islast
+    if not na(liquidityHighLine)
+        line.delete(liquidityHighLine)
+    if not na(liquidityLowLine)
+        line.delete(liquidityLowLine)
+    if not na(liquidityHighLbl)
+        label.delete(liquidityHighLbl)
+    if not na(liquidityLowLbl)
+        label.delete(liquidityLowLbl)
+
+    liquidityHighLine := line.new(bar_index, liqHigh, bar_index + 20, liqHigh, xloc = xloc.bar_index, color = color.new(color.lime, 20), width = 2, style = line.style_dashed)
+    liquidityLowLine := line.new(bar_index, liqLow, bar_index + 20, liqLow, xloc = xloc.bar_index, color = color.new(color.red, 20), width = 2, style = line.style_dashed)
+    liquidityHighLbl := label.new(bar_index + 20, liqHigh, "Liquidity High\n" + f_price(liqHigh), xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left, color = color.lime, textcolor = color.white, size = size.small)
+    liquidityLowLbl := label.new(bar_index + 20, liqLow, "Liquidity Low\n" + f_price(liqLow), xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left, color = color.red, textcolor = color.white, size = size.small)
+
+//======================================
+// DIRECTION PREDICTION / BIAS ARAH
+//======================================
+directionScore = 0.0
+directionScore += bullishTrend ? 15 : bearishTrend ? -15 : 0
+directionScore += useMTF ? (mtfBull ? 15 : mtfBear ? -15 : 0) : 0
+directionScore += macdLine > macdSignal ? 15 : -15
+directionScore += rsiValue > 55 ? 10 : rsiValue < 45 ? -10 : 0
+directionScore += volumeOk ? 10 : -5
+directionScore += bosBull ? 15 : bosBear ? -15 : 0
+directionScore += smartMoneyBuy ? 10 : smartMoneySell ? -10 : 0
+directionScore += pullbackBuy ? 5 : pullbackSell ? -5 : 0
+directionScore += breakoutUp ? 5 : breakoutDown ? -5 : 0
+directionScore += stBullish ? 10 : stBearish ? -10 : 0
+directionScore := math.max(math.min(directionScore, 100), -100)
+
+directionBull = directionScore > 25
+directionBear = directionScore < -25
+directionSideways = not directionBull and not directionBear
+
+regNowPredict = ta.linreg(close, predictionLen, 0)
+regPrevPredict = ta.linreg(close, predictionLen, 1)
+predictionSlope = regNowPredict - regPrevPredict
+
+rawPredictionPrice = close + predictionSlope * predictionBars
+
+targetUp = not na(lastSwingHigh) and lastSwingHigh > close ? lastSwingHigh : ta.highest(high, 50)
+targetDown = not na(lastSwingLow) and lastSwingLow < close ? lastSwingLow : ta.lowest(low, 50)
+
+predictedPrice = directionBull ? math.max(close, math.min(rawPredictionPrice, targetUp)) : directionBear ? math.min(close, math.max(rawPredictionPrice, targetDown)) : close
+predictionColor = directionBull ? color.lime : directionBear ? color.red : color.gray
+downsidePercent = directionBear ? math.abs(close - predictedPrice) / close * 100 : na
+upsidePercent = directionBull ? math.abs(predictedPrice - close) / close * 100 : na
+predictionText = directionBull ? "Prediction: UP\nTarget Up: " + f_price(predictedPrice) + "\nUpside: " + str.tostring(upsidePercent, "#.##") + "%\nScore: " + str.tostring(directionScore, "#") + "\nSL: " + f_price(initialSL) + "\nTP1: " + f_price(f_target(close, initialSL, tp1RR)) + "\nTP2: " + f_price(f_target(close, initialSL, tp2RR)) : directionBear ? "Prediction: DOWN\nTarget Down: " + f_price(predictedPrice) + "\nDownside: " + str.tostring(downsidePercent, "#.##") + "%\nScore: " + str.tostring(directionScore, "#") + "\nShort SL: " + f_price(initialSLShort) + "\nTP1: " + f_price(f_target_short(close, initialSLShort, tp1RR)) + "\nTP2: " + f_price(f_target_short(close, initialSLShort, tp2RR)) : "Prediction: SIDEWAYS\nEst: " + f_price(predictedPrice) + "\nScore: " + str.tostring(directionScore, "#")
+
+predictionRange = atrValue * 0.8
+predictionUpper = predictedPrice + predictionRange
+predictionLower = predictedPrice - predictionRange
+
+if showDirectionPrediction and barstate.islast
+    if not na(directionLine)
+        line.delete(directionLine)
+    if not na(directionUpperLine)
+        line.delete(directionUpperLine)
+    if not na(directionLowerLine)
+        line.delete(directionLowerLine)
+    if not na(directionLbl)
+        label.delete(directionLbl)
+
+    directionLine := line.new(bar_index, close, bar_index + predictionBars, predictedPrice, xloc = xloc.bar_index, color = predictionColor, width = 3, style = line.style_dashed)
+    directionUpperLine := line.new(bar_index, close + predictionRange, bar_index + predictionBars, predictionUpper, xloc = xloc.bar_index, color = color.new(predictionColor, 65), width = 1, style = line.style_dotted)
+    directionLowerLine := line.new(bar_index, close - predictionRange, bar_index + predictionBars, predictionLower, xloc = xloc.bar_index, color = color.new(predictionColor, 65), width = 1, style = line.style_dotted)
+    directionLbl := label.new(bar_index + predictionBars, predictedPrice, predictionText, xloc = xloc.bar_index, yloc = yloc.price, style = label.style_label_left, color = predictionColor, textcolor = color.white, size = size.small)
+
+// Prediction TP/SL box hanya tampil saat ADA OPEN POSITION.
+// Saat tidak ada posisi aktif, objek TP/SL prediksi dihapus agar tidak bergerak terus di candle terakhir.
+if showPredictionTPSL and inTrade and barstate.islast
+    if not na(predictionEntryLine)
+        line.delete(predictionEntryLine)
+    if not na(predictionSLLine)
+        line.delete(predictionSLLine)
+    if not na(predictionTP1Line)
+        line.delete(predictionTP1Line)
+    if not na(predictionTP2Line)
+        line.delete(predictionTP2Line)
+    if not na(predictionRiskBox)
+        box.delete(predictionRiskBox)
+    if not na(predictionRewardBox)
+        box.delete(predictionRewardBox)
+
+    predictionEntry = entryPrice
+    predictionSL = stopLoss
+    predictionTP1 = takeProfit1
+    predictionTP2 = takeProfit2
+    predictionIsLong = tradeSide == 1
+    predictionIsShort = tradeSide == -1
+
+    if (predictionIsLong or predictionIsShort) and not na(predictionEntry) and not na(predictionSL) and not na(predictionTP1) and not na(predictionTP2)
+        predX1 = entryBar
+        predX2 = bar_index + predictionBoxBars
+
+        predictionEntryLine := line.new(predX1, predictionEntry, predX2, predictionEntry, xloc = xloc.bar_index, color = color.new(color.white, 0), width = 2)
+        predictionSLLine := line.new(predX1, predictionSL, predX2, predictionSL, xloc = xloc.bar_index, color = color.new(color.red, 0), width = 2)
+        predictionTP1Line := line.new(predX1, predictionTP1, predX2, predictionTP1, xloc = xloc.bar_index, color = color.new(color.green, 0), width = 1)
+        predictionTP2Line := line.new(predX1, predictionTP2, predX2, predictionTP2, xloc = xloc.bar_index, color = color.new(color.teal, 0), width = 2)
+
+        predictionRiskBox := box.new(left = predX1, top = predictionIsLong ? predictionEntry : predictionSL, right = predX2, bottom = predictionIsLong ? predictionSL : predictionEntry, xloc = xloc.bar_index, bgcolor = color.new(color.red, 84), border_color = color.new(color.red, 25))
+        predictionRewardBox := box.new(left = predX1, top = predictionIsLong ? predictionTP2 : predictionEntry, right = predX2, bottom = predictionIsLong ? predictionEntry : predictionTP2, xloc = xloc.bar_index, bgcolor = color.new(color.green, 86), border_color = color.new(color.green, 25))
+
+if (not showPredictionTPSL or not inTrade) and barstate.islast
+    if not na(predictionEntryLine)
+        line.delete(predictionEntryLine)
+        predictionEntryLine := na
+    if not na(predictionSLLine)
+        line.delete(predictionSLLine)
+        predictionSLLine := na
+    if not na(predictionTP1Line)
+        line.delete(predictionTP1Line)
+        predictionTP1Line := na
+    if not na(predictionTP2Line)
+        line.delete(predictionTP2Line)
+        predictionTP2Line := na
+    if not na(predictionRiskBox)
+        box.delete(predictionRiskBox)
+        predictionRiskBox := na
+    if not na(predictionRewardBox)
+        box.delete(predictionRewardBox)
+        predictionRewardBox := na
+
+//======================================
+// PUMP / DUMP WARNING
+//======================================
+pumpStrength = (close - open) / open * 100
+dumpStrength = (open - close) / open * 100
+pumpCandle = close > open and pumpStrength >= pumpPercent and volume > volAvg * pumpVolMult and close > emaFast
+dumpCandle = close < open and dumpStrength >= pumpPercent and volume > volAvg * pumpVolMult and close < emaFast
+
+//======================================
+// MARKET PHASE & CALCULATIONS
+//======================================
+phase = bullishTrend and volumeOk ? "Markup" : bearishTrend and volumeOk ? "Markdown" : volume < volAvg ? "Accumulation" : "Distribution"
+
+riskPercent = not na(stopLoss) and not na(entryPrice) ? math.abs(entryPrice - stopLoss) / entryPrice * 100 : na
+rewardTP1 = not na(takeProfit1) and not na(entryPrice) ? math.abs(takeProfit1 - entryPrice) / entryPrice * 100 : na
+rewardTP2 = not na(takeProfit2) and not na(entryPrice) ? math.abs(takeProfit2 - entryPrice) / entryPrice * 100 : na
+rrRatio = not na(riskPercent) and riskPercent > 0 ? rewardTP2 / riskPercent : na
+riskAmount = activeAccountSize * (riskPerTrade / 100)
+riskPerShare = not na(entryPrice) and not na(stopLoss) ? math.abs(entryPrice - stopLoss) * (syminfo.pointvalue > 0 ? syminfo.pointvalue : 1.0) * riskConversion : na
+positionSize = not na(entryPrice) and not na(stopLoss) ? f_calc_qty(entryPrice, stopLoss) : na
+positionLots = activeMarket == "IDX Stock" and not na(positionSize) ? positionSize / idxLotSize : activeMarket == "Forex" ? positionSize : na
+estimatedCapital = not na(positionSize) ? positionSize * close * (syminfo.pointvalue > 0 ? syminfo.pointvalue : 1.0) : na
+positionText = f_qty_text(positionSize)
+
+// PnL persen dibuat eksplisit supaya crypto yang memakai qty pecahan tetap terlihat jelas di dashboard.
+pointValueForPnl = syminfo.pointvalue > 0 ? syminfo.pointvalue : 1.0
+openQty = math.abs(strategy.position_size)
+openPnlPct = inTrade and not na(entryPrice) and entryPrice > 0 ? tradeSide == 1 ? (close - entryPrice) / entryPrice * 100 : tradeSide == -1 ? (entryPrice - close) / entryPrice * 100 : na : na
+openPnlCash = inTrade and not na(entryPrice) and openQty > 0 ? (tradeSide == 1 ? close - entryPrice : tradeSide == -1 ? entryPrice - close : na) * openQty * pointValueForPnl * riskConversion : na
+netPnlPct = activeAccountSize > 0 ? strategy.netprofit / activeAccountSize * 100 : na
+pnlText = inTrade ? f_money(openPnlCash) + " / " + f_signed_pct(openPnlPct) : "Net " + f_money(strategy.netprofit) + " / " + f_signed_pct(netPnlPct)
+
+//======================================
+// DASHBOARD & CLEAN ALERT SYSTEM
+//======================================
+watchBuyAlert = confirmFilter and (earlyBuy or pullbackBuy or liquiditySweepLow or bullishFVG or bullishOB or breakoutUp)
+strongBuyAlert = confirmFilter and (buySignal or smartMoneyBuy or bosBull or chochBull) and score >= 60 and bullishTrend
+ultraBuyAlert = confirmFilter and strongBuyAlert and score >= 85 and (not useMTF or mtfBull) and volumeOk
+
+watchShortAlert = allowShort and confirmFilter and (earlySell or pullbackSell or liquiditySweepHigh or bearishFVG or bearishOB or breakoutDown)
+strongShortAlert = allowShort and confirmFilter and (shortSignal or smartMoneySell or bosBear or chochBear) and shortScore >= 60 and bearishTrend
+ultraShortAlert = allowShort and confirmFilter and strongShortAlert and shortScore >= 85 and (not useMTF or mtfBear) and volumeOk
+
+exitAlert = confirmFilter and (sellSignal or (tradeSide == 1 and (smartMoneySell or bosBear or chochBear)) or (tradeSide == -1 and (smartMoneyBuy or bosBull or chochBull)))
+profitAlert = confirmFilter and (tp1Hit or tp2Hit)
+riskAlert = confirmFilter and (slHit or trailHit or pumpCandle or dumpCandle)
+avoidAlert = confirmFilter and noTradeZone
+
+// Mode-aware wording: Spot tetap BUY/SELL, Futures pakai LONG/SHORT ENTRY agar tidak membingungkan.
+actionUltraLongText = allowShort ? "ULTRA LONG" : "ULTRA BUY"
+actionStrongLongText = allowShort ? "LONG ENTRY" : "STRONG BUY"
+actionWatchLongText = allowShort ? "WATCH LONG" : "WATCH BUY"
+actionExitText = allowShort ? (tradeSide == 1 ? "EXIT LONG" : tradeSide == -1 ? "EXIT SHORT" : "EXIT POSITION") : "SELL / EXIT"
+actionText = ultraBuyAlert ? actionUltraLongText : ultraShortAlert ? "ULTRA SHORT" : strongBuyAlert ? actionStrongLongText : strongShortAlert ? "SHORT ENTRY" : watchBuyAlert ? actionWatchLongText : watchShortAlert ? "WATCH SHORT" : profitAlert ? "TAKE PROFIT" : exitAlert ? actionExitText : riskAlert ? "RISK WARNING" : avoidAlert ? "WAIT / NO TRADE" : isLongTrade ? "HOLD LONG" : isShortTrade ? "HOLD SHORT" : "WAIT"
+
+plotshape(showPullbackDebug and pullbackBuy, title = "Pullback Buy Raw", text = "PB BUY", style = shape.triangleup, location = location.belowbar, color = color.new(color.green, 0), textcolor = color.white, size = size.tiny)
+plotshape(showPullbackDebug and pullbackSell, title = "Pullback Short Raw", text = "PB SHORT", style = shape.triangledown, location = location.abovebar, color = color.new(color.red, 0), textcolor = color.white, size = size.tiny)
+plotshape(showPullbackDebug and pullbackBuyGate, title = "Pullback Buy Gate", text = "PB OK", style = shape.labelup, location = location.belowbar, color = color.new(color.lime, 0), textcolor = color.white, size = size.tiny)
+plotshape(showPullbackDebug and pullbackSellGate, title = "Pullback Short Gate", text = "PB OK", style = shape.labeldown, location = location.abovebar, color = color.new(color.orange, 0), textcolor = color.white, size = size.tiny)
+
+plotshape(smcVisualOk and showStructure and bosBull, title = "Bullish BOS", text = "BOS", style = shape.labelup, location = location.belowbar, color = color.lime, textcolor = color.white, size = size.tiny)
+plotshape(smcVisualOk and showStructure and bosBear, title = "Bearish BOS", text = "BOS", style = shape.labeldown, location = location.abovebar, color = color.red, textcolor = color.white, size = size.tiny)
+plotshape(smcVisualOk and showStructure and chochBull, title = "Bullish CHOCH", text = "CHOCH", style = shape.circle, location = location.belowbar, color = color.aqua, textcolor = color.black, size = size.tiny)
+plotshape(smcVisualOk and showStructure and chochBear, title = "Bearish CHOCH", text = "CHOCH", style = shape.circle, location = location.abovebar, color = color.orange, textcolor = color.black, size = size.tiny)
+plotshape(not allowShort and smcVisualOk and smartMoneyBuy, title = "Smart Money Buy", text = "SM BUY", style = shape.labelup, location = location.belowbar, color = color.fuchsia, textcolor = color.white, size = size.tiny)
+plotshape(not allowShort and smcVisualOk and smartMoneySell, title = "Smart Money Sell", text = "SM SELL", style = shape.labeldown, location = location.abovebar, color = color.purple, textcolor = color.white, size = size.tiny)
+plotshape(allowShort and smcVisualOk and smartMoneyBuy, title = "Smart Money Long", text = "SM LONG", style = shape.labelup, location = location.belowbar, color = color.fuchsia, textcolor = color.white, size = size.tiny)
+plotshape(allowShort and smcVisualOk and smartMoneySell, title = "Smart Money Short", text = "SM SHORT", style = shape.labeldown, location = location.abovebar, color = color.purple, textcolor = color.white, size = size.tiny)
+plotshape(smcVisualOk and liquiditySweepLow, title = "Liquidity Sweep Low", text = "Sweep", style = shape.circle, location = location.belowbar, color = color.lime, textcolor = color.white, size = size.tiny)
+plotshape(smcVisualOk and liquiditySweepHigh, title = "Liquidity Sweep High", text = "Sweep", style = shape.circle, location = location.abovebar, color = color.red, textcolor = color.white, size = size.tiny)
+
+alertcondition(buySignal, title = "Long Entry", message = "LONG entry signal on {{ticker}} at {{close}}")
+alertcondition(shortSignal, title = "Short Entry", message = "SHORT entry signal on {{ticker}} at {{close}}")
+alertcondition(sellSignal, title = "Exit Position", message = "Exit signal on {{ticker}} at {{close}}")
+
+dashboardPos = dashboardPosition == "Top Right" ? position.top_right : dashboardPosition == "Top Left" ? position.top_left : dashboardPosition == "Bottom Right" ? position.bottom_right : position.bottom_left
+dashboardTextSize = dashboardSize == "Tiny" ? size.tiny : dashboardSize == "Small" ? size.small : size.normal
+
+dashBg = color.new(color.black, 10)
+dashHeader = color.new(color.blue, 15)
+dashBull = color.new(color.green, 20)
+dashBear = color.new(color.red, 20)
+dashNeutral = color.new(color.gray, 35)
+dashOrange = color.new(color.orange, 15)
+dashProfit = color.new(color.teal, 20)
+pnlColor = inTrade ? openPnlPct > 0 ? dashProfit : openPnlPct < 0 ? dashOrange : dashNeutral : netPnlPct > 0 ? dashProfit : netPnlPct < 0 ? dashOrange : dashNeutral
+
+tradeStatusText = isLongTrade ? "LONG 🟢" : isShortTrade ? "SHORT 🔴" : buySignal ? (allowShort ? "LONG 🟢" : "BUY 🟢") : shortSignal ? "SHORT 🔴" : "WAIT ⚪"
+dashTrendText = bullishTrend ? "BULLISH 🟢" : bearishTrend ? "BEARISH 🔴" : "SIDEWAYS ⚪"
+dashMtfText = not useMTF ? "OFF ⚪" : manualMtfInvalid ? "AUTO FIX ⚙️ " + activeMtfTF : not mtfTimeframeOk ? "INVALID TF ⚠️ " + activeMtfTF : mtfBull ? "BULLISH 🟢 " + activeMtfTF : mtfBear ? "BEARISH 🔴 " + activeMtfTF : "NETRAL ⚪ " + activeMtfTF
+dashGuardText = allowShort ? futuresGuardMode : "Spot Only"
+dashStText = stBullish ? "BULLISH 🟢" : "BEARISH 🔴"
+dashRsiText = rsiValue > rsiBuyLevel ? "BULLISH 🟢" : rsiValue < rsiSellLevel ? "BEARISH 🔴" : "NETRAL ⚪"
+dashMacdText = macdLine > macdSignal ? "BULLISH 🟢" : "BEARISH 🔴"
+predictionStatus = directionBull ? "UP " + f_price(predictedPrice) : directionBear ? "DOWN " + f_price(predictedPrice) : "SIDEWAYS"
+
+actionColor = str.contains(actionText, "LONG") or str.contains(actionText, "BUY") ? dashBull :
+     str.contains(actionText, "SHORT") ? dashBear :
+     str.contains(actionText, "PROFIT") ? dashProfit :
+     str.contains(actionText, "EXIT") or str.contains(actionText, "SELL") or str.contains(actionText, "RISK") ? dashOrange :
+     dashNeutral
+
+tradeStatusColor = str.contains(tradeStatusText, "LONG") or str.contains(tradeStatusText, "BUY") ? dashBull : str.contains(tradeStatusText, "SHORT") ? dashBear : dashNeutral
+trendColorDash = bullishTrend ? dashBull : bearishTrend ? dashBear : dashNeutral
+mtfColorDash = not useMTF ? dashNeutral : manualMtfInvalid ? dashOrange : not mtfTimeframeOk ? dashOrange : mtfBull ? dashBull : mtfBear ? dashBear : dashNeutral
+stColorDash = stBullish ? dashBull : dashBear
+rsiColorDash = rsiValue > rsiBuyLevel ? dashBull : rsiValue < rsiSellLevel ? dashBear : dashNeutral
+macdColorDash = macdLine > macdSignal ? dashBull : dashBear
+predictionColorDash = directionBull ? dashBull : directionBear ? dashBear : dashNeutral
+
+var table statusTable = table.new(dashboardPos, 2, 19, border_width = 1, border_color = color.new(color.white, 70), frame_color = color.new(color.white, 70), frame_width = 1)
+
+if showTable and barstate.islast
+    table.clear(statusTable, 0, 0, 1, 18)
+
+    table.cell(statusTable, 0, 0, "AI SIGNAL DASHBOARD", bgcolor = dashHeader, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 0, syminfo.ticker, bgcolor = dashHeader, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 1, "Action", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 1, actionText, bgcolor = actionColor, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 2, "Mode", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 2, signalMode + " / " + entryMode, bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 3, "Market", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 3, marketMode + " | " + activeMarket, bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 4, "Signal", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 4, tradeStatusText, bgcolor = tradeStatusColor, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 5, "Trend", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 5, dashTrendText, bgcolor = trendColorDash, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 6, "MTF", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 6, dashMtfText, bgcolor = mtfColorDash, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 7, "Supertrend", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 7, dashStText, bgcolor = stColorDash, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 8, "RSI", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 8, str.tostring(rsiValue, "#.##") + " | " + dashRsiText, bgcolor = rsiColorDash, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 9, "MACD", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 9, dashMacdText, bgcolor = macdColorDash, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 10, "Score", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 10, allowShort ? "L " + str.tostring(score, "#") + "% / S " + str.tostring(shortScore, "#") + "%" : str.tostring(score, "#") + "% / " + entryRating, bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 11, "Entry", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 11, na(entryPrice) ? "-" : f_price(entryPrice), bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 12, "SL", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 12, na(stopLoss) ? "-" : f_price(stopLoss), bgcolor = color.new(color.red, 25), text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 13, "TP1", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 13, na(takeProfit1) ? "-" : f_price(takeProfit1), bgcolor = color.new(color.green, 25), text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 14, "TP2", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 14, na(takeProfit2) ? "-" : f_price(takeProfit2), bgcolor = color.new(color.teal, 20), text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 15, "Risk / RR", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 15, f_pct(riskPercent) + " / " + (na(rrRatio) ? "-" : "1:" + str.tostring(rrRatio, "#.##")), bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 16, "Qty/Lot", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 16, positionText, bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 17, "PnL", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 17, pnlText, bgcolor = pnlColor, text_color = color.white, text_size = dashboardTextSize)
+
+    table.cell(statusTable, 0, 18, "Prediction", bgcolor = dashBg, text_color = color.white, text_size = dashboardTextSize)
+    table.cell(statusTable, 1, 18, predictionStatus, bgcolor = predictionColorDash, text_color = color.white, text_size = dashboardTextSize)
+
+if not showTable and barstate.islast
+    table.clear(statusTable, 0, 0, 1, 18)
+
+// ==========================================
+// 📖 BUKU PANDUAN: OTW JADI KAYA
+// ==========================================
+// Selamat datang di panduan penggunaan indikator OTW JADI KAYA - BACKTEST PRO.
+// Skrip ini adalah sistem trading All-in-One kelas premium yang menggabungkan
+// analisis Tren, Momentum, Smart Money Concepts (SMC), dan Manajemen Risiko.
+//
+// 🛠️ 1. MEMAHAMI FITUR UTAMA
+// - Trend & Momentum: Kombinasi ganda EMA, RSI, dan MACD.
+// - SMC: Deteksi jejak institusi melalui Order Block (OB), FVG, BOS, dan CHOCH.
+// - Supertrend Filter: Garis dinamis penunjuk arah tren utama.
+// - Auto Risk Management: Perhitungan lot/shares otomatis berdasarkan batas risiko.
+//
+// 🚦 2. MEMBACA SINYAL & LABEL
+// - Spot: BUY / SELL. Futures: LONG ENTRY / SHORT ENTRY / EXIT LONG / EXIT SHORT.
+// - BOS / CHOCH: Break of Structure (lanjut tren) / Change of Character (reversal).
+// - Spot: SM BUY / SM SELL. Futures: SM LONG / SM SHORT.
+// - Sweep: Liquidity Sweep / Fake Breakout.
+//
+// ⚙️ 3. MODE PENGATURAN (SETTINGS)
+// Signal Mode (Kecepatan):
+// - Conservative: Lambat, akurat (Swing 4H - 1D).
+// - Balanced: Paling stabil (Rekomendasi utama).
+// - Sensitive: Cepat, dinamis (Crypto / IHSG likuid).
+// - Super Sensitive: Sangat agresif (Scalping 1m - 5m).
+// Entry Mode:
+// - Momentum: Breakout + Volume.
+// - Pullback: Koreksi ke EMA saat tren naik, lalu mantul.
+// - Hybrid: Menggabungkan Momentum + Pullback.
+//
+// 🛡️ 4. MANAJEMEN RISIKO (DASHBOARD)
+// - Atur Virtual Account Size & Risk Per Trade % di pengaturan.
+// - Saat sinyal entry muncul, lihat baris "Shares/Lots" di tabel.
+// - Beli maksimal sesuai angka tersebut agar risiko tertahan 1%.
+//
+// 💡 5. BEST PRACTICES & TIPS
+// - JANGAN Blind Entry. Pastikan tidak di "No Trade Zone" (background abu-abu).
+// - Konfirmasi Ganda: Sinyal entry didukung kotak OB / Smart Money.
+// - Gunakan Trailing Stop: Biarkan garis ungu mengunci profit otomatis.
+//
+// ⚠️ DISCLAIMER:
+// Educational and technical analysis only. Not financial advice. Trade at your own risk.
+// ==========================================

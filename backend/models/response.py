@@ -235,6 +235,8 @@ class HistoricalTradeLog(BaseModel):
     exit_price: float
     status: str
     pnl_pct: float
+    entry_time: Optional[str] = None
+    exit_time: Optional[str] = None
 
 class BacktestSummary(BaseModel):
     timeframe: str
@@ -379,6 +381,70 @@ class RiskTabData(BaseModel):
     biggest_worry_text: str
     risk_grid: List[dict] = []
 
+class SMCAnalysis(BaseModel):
+    bullish_fvg_active: bool = False
+    bearish_fvg_active: bool = False
+    bullish_ob_active: bool = False
+    bearish_ob_active: bool = False
+    smart_money_buy: bool = False
+    smart_money_sell: bool = False
+    bos_bull: bool = False
+    bos_bear: bool = False
+    choch_bull: bool = False
+    choch_bear: bool = False
+    liquidity_sweep_low: bool = False
+    liquidity_sweep_high: bool = False
+    breakout_up: bool = False
+    breakout_down: bool = False
+    pump_candle: bool = False
+    dump_candle: bool = False
+    market_phase: str = "Accumulation"
+    active_bull_fvgs: List[dict] = []
+    active_bull_obs: List[dict] = []
+
+class SupertrendResult(BaseModel):
+    st_value: Optional[float] = None
+    st_trend: str = "Unknown"
+    st_color: str = "gray"
+
+class ReltTradeSetup(BaseModel):
+    entry_price: float = 0.0
+    stop_loss: float = 0.0
+    tp1: float = 0.0
+    tp2: float = 0.0
+    trailing_stop: float = 0.0
+    risk_reward_ratio: float = 0.0
+    risk_per_share: float = 0.0
+    risk_percent: float = 0.0
+    account_size_idr: float = 10000000.0
+    risk_per_trade_pct: float = 1.0
+    recommended_lots: int = 0
+    recommended_shares: int = 0
+    estimated_capital_required: float = 0.0
+    max_risk_amount: float = 0.0
+
+class ReltDirectionPrediction(BaseModel):
+    direction: str = "SIDEWAYS"
+    predicted_price: float = 0.0
+    upside_pct: float = 0.0
+    confidence_score: int = 0
+    target_bars: int = 12
+
+class ReltSignalResult(BaseModel):
+    action: str = "WAIT"
+    signal_mode: str = "Balanced"
+    entry_mode: str = "Hybrid"
+    score: int = 0
+    score_max: int = 100
+    rating: str = "D Avoid"
+    trend_strength: str = "Weak"
+    is_no_trade_zone: bool = False
+    smc: SMCAnalysis
+    supertrend: SupertrendResult
+    trade_setup: ReltTradeSetup
+    direction_prediction: ReltDirectionPrediction
+    indicators: dict = {}
+
 class FinancialsAnalyticsResponse(BaseModel):
     history: HistoryTabData
     valuation_bands: ValuationBandsData
@@ -428,6 +494,7 @@ class AnalyzeResponse(BaseModel):
     technical_detail: Optional[TechnicalDetail] = None
     session_info: Optional[SessionInfo] = None
     detected_patterns: List[DetectedPattern] = []
+    relt_signal: Optional[ReltSignalResult] = None
 
 class ScreenerResult(BaseModel):
     ticker: str
@@ -441,7 +508,11 @@ class ScreenerResult(BaseModel):
     score: int
     score_display: str
     risk_status: str
+    relt_score: Optional[int] = None
+    relt_rating: Optional[str] = None
+    relt_action: Optional[str] = None
 
 class ScreenerResponse(BaseModel):
     data: List[ScreenerResult]
     session_info: SessionInfo
+

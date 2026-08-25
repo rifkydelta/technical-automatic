@@ -34,6 +34,18 @@ export default function StrategyView({ strategiesData }) {
     return 'var(--neutral)';
   };
 
+  const midEntry = strategyData?.entry_low && strategyData?.entry_high
+    ? (strategyData.entry_low + strategyData.entry_high) / 2
+    : (strategyData?.entry_low || strategyData?.entry_high || 1);
+
+  const tp1Pct = strategyData?.target_1 && midEntry > 0
+    ? (((strategyData.target_1 - midEntry) / midEntry) * 100).toFixed(1)
+    : null;
+
+  const tp2Pct = strategyData?.target_2 && midEntry > 0
+    ? (((strategyData.target_2 - midEntry) / midEntry) * 100).toFixed(1)
+    : null;
+
   return (
     <div className="flex-col gap-md">
       
@@ -151,12 +163,29 @@ export default function StrategyView({ strategiesData }) {
         <div className="card flex-col gap-xs" style={{ padding: '16px' }}>
           <span className="text-xs tracking-widest uppercase font-semibold text-muted">Targets (TP)</span>
           <div className="flex-row justify-between w-full">
+            {/* TP 1 */}
             <div className="flex-col">
-              <span className="text-xs text-secondary">TP 1</span>
+              <div className="flex-row items-baseline gap-xs">
+                <span className="text-xs text-secondary">TP 1</span>
+                {tp1Pct !== null && (
+                  <span className="text-xs font-mono font-bold text-bullish" style={{ fontSize: '11px' }}>
+                    +{tp1Pct}%
+                  </span>
+                )}
+              </div>
               <span className="text-md font-mono font-bold text-bullish">{Math.round(strategyData.target_1).toLocaleString()}</span>
             </div>
+
+            {/* TP 2 */}
             <div className="flex-col text-right">
-              <span className="text-xs text-secondary">TP 2</span>
+              <div className="flex-row items-baseline justify-end gap-xs">
+                <span className="text-xs text-secondary">TP 2</span>
+                {tp2Pct !== null && (
+                  <span className="text-xs font-mono font-bold text-bullish" style={{ fontSize: '11px' }}>
+                    +{tp2Pct}%
+                  </span>
+                )}
+              </div>
               <span className="text-md font-mono font-bold text-bullish">{Math.round(strategyData.target_2).toLocaleString()}</span>
             </div>
           </div>

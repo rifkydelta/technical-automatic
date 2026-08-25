@@ -14,6 +14,7 @@ from idx_cli.renderers.technical import render_technical
 from idx_cli.renderers.financial import render_financial
 from idx_cli.renderers.news import render_news
 from idx_cli.renderers.chart_pattern import render_chart_patterns
+from idx_cli.renderers.relt_signal import render_relt_signal
 
 console = Console()
 client = APIClient()
@@ -34,6 +35,7 @@ def analyze_cmd(
         t = tab.lower()
         if t in ["overview", "all"]:
             console.print(render_top_cards(data))
+            console.print(render_relt_signal(data))
             console.print(render_support_resistance(data))
             console.print(render_analysis(data))
             console.print(render_scenarios(data))

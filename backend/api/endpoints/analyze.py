@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from models.request import AnalyzeRequest, ScreenerRequest, CustomScreenerExecuteRequest
-from models.response import AnalyzeResponse, OHLCVBar, SessionInfo, ScreenerResponse, ScreenerResult, FairValueAnalysis, GrowthAnalysis, AnalystTargetInfo, ValuationModelResult
+from models.response import AnalyzeResponse, OHLCVBar, SessionInfo, ScreenerResponse, ScreenerResult, FairValueAnalysis, GrowthAnalysis, AnalystTargetInfo, ValuationModelResult, ReltSignalResult
 from services.data_fetcher import DataFetcher
 from services.indicator_engine import IndicatorEngine
 from services.analysis_engine import AnalysisEngine
@@ -12,6 +12,7 @@ from services.idx_universe import get_all_idx_tickers
 from services.custom_screeners import SCREENER_REGISTRY, get_available_custom_screeners
 from services.valuation_engine import ValuationEngine
 from services.google_finance_fetcher import GoogleFinanceFetcher
+from services.relt_signal_engine import ReltSignalEngine
 import datetime
 import concurrent.futures
 
@@ -26,6 +27,7 @@ session_svc = SessionService()
 pattern_engine = PatternEngine()
 valuation_engine = ValuationEngine()
 google_fetcher = GoogleFinanceFetcher()
+relt_engine = ReltSignalEngine()
 
 def df_to_ohlcv(df):
     if df is None or df.empty:
@@ -42,6 +44,7 @@ def df_to_ohlcv(df):
             volume=int(row['Volume'])
         ))
     return bars
+
 
 @router.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_ticker(request: AnalyzeRequest):
@@ -337,6 +340,16 @@ async def analyze_ticker(request: AnalyzeRequest):
         float_shares=info.get("float_shares")
     )
     
+    # Calculate RELT Signal & SMC Analysis
+    relt_raw = relt_engine.analyze(
+        daily_df=daily_df,
+        reference_price=reference_price,
+        signal_mode="Balanced",
+        entry_mode="Hybrid",
+        mtf_bullish=(mtf.alignment == "Confirmed")
+    )
+    relt_signal_obj = ReltSignalResult(**relt_raw)
+
     # Assemble response
     return AnalyzeResponse(
         ticker=ticker,
@@ -371,7 +384,8 @@ async def analyze_ticker(request: AnalyzeRequest):
         warnings=warnings,
         technical_detail=technical_detail,
         session_info=session_info,
-        detected_patterns=detected_patterns
+        detected_patterns=detected_patterns,
+        relt_signal=relt_signal_obj
     )
 
 @router.post("/screener", response_model=ScreenerResponse)
@@ -441,6 +455,15 @@ async def analyze_screener(request: ScreenerRequest):
             
             risk_status = "High Risk" if risk.is_rejected or ("buy" not in rec.lower() and "bullish" not in rec.lower()) else "Good Setup"
             
+            # Fast RELT Evaluation for Screener
+            relt_fast = relt_engine.analyze(
+                daily_df=daily_df,
+                reference_price=reference_price,
+                signal_mode="Balanced",
+                entry_mode="Hybrid",
+                mtf_bullish=False
+            )
+
             return ScreenerResult(
                 ticker=ticker,
                 company_name=info.get("name", ticker),
@@ -452,8 +475,12 @@ async def analyze_screener(request: ScreenerRequest):
                 recommendation=rec,
                 score=score.score,
                 score_display=score.score_display,
-                risk_status=risk_status
+                risk_status=risk_status,
+                relt_score=relt_fast.get("score"),
+                relt_rating=relt_fast.get("rating"),
+                relt_action=relt_fast.get("action")
             )
+
         except Exception as e:
             import traceback
             err_str = traceback.format_exc()

@@ -1,9 +1,42 @@
 'use client';
 import { useState, useEffect } from 'react';
 import ScreenerCard from './ScreenerCard';
-import { Building2, Flame, Zap, SlidersHorizontal, Search, RefreshCw, Sparkles, Filter, Clock, Moon } from 'lucide-react';
+import { Building2, Flame, Zap, SlidersHorizontal, Search, RefreshCw, Sparkles, Filter, Clock, Moon, Crosshair, Layers } from 'lucide-react';
 
 const CATEGORIES = [
+  {
+    id: 'relt_a_plus',
+    label: 'RELT Setup A+ (≥75%)',
+    badge: 'A+ Strong Buy',
+    icon: Sparkles,
+    color: '#4ade80',
+    tickers: [],
+    isCustomScreener: true,
+    screenerId: 'relt_a_plus',
+    desc: 'Hasil pemindaian seluruh IHSG untuk setup komposit Grade A+/A (Score ≥ 75%).'
+  },
+  {
+    id: 'relt_pullback',
+    label: 'RELT Pullback Hunter',
+    badge: 'EMA Retest Rebound',
+    icon: Crosshair,
+    color: '#38bdf8',
+    tickers: [],
+    isCustomScreener: true,
+    screenerId: 'relt_pullback',
+    desc: 'Saham tren naik yang sedang retest sehat ke area EMA dengan candle reversal.'
+  },
+  {
+    id: 'relt_smc_breakout',
+    label: 'Smart Money & FVG Breakout',
+    badge: 'Institutional SMC',
+    icon: Layers,
+    color: '#c084fc',
+    tickers: [],
+    isCustomScreener: true,
+    screenerId: 'relt_smc_breakout',
+    desc: 'Konfirmasi jejak institusi melalui Order Block (OB), FVG Gap, dan Bullish BOS.'
+  },
   {
     id: 'bank',
     label: 'Sektor Bank',
@@ -65,6 +98,7 @@ const CATEGORIES = [
     desc: 'Hasil pemindaian seluruh IHSG untuk strategi BSJP (Beli Sore Jual Pagi).'
   }
 ];
+
 
 export default function CategoryPresetHub({ onTickerClick, mode = 'live' }) {
   const [activeTab, setActiveTab] = useState('bank');

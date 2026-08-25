@@ -18,6 +18,7 @@ import DashboardScreener from '@/components/DashboardScreener';
 import ChartPatternTab from '@/components/chartpattern/ChartPatternTab';
 import LearningCenter from '@/components/LearningCenter';
 import CategoryPresetHub from '@/components/CategoryPresetHub';
+import ReltSignalCard from '@/components/ReltSignalCard';
 import { BookOpen, Terminal, ArrowLeft } from 'lucide-react';
 
 export default function Home() {
@@ -354,6 +355,7 @@ export default function Home() {
               {activeTab === 'overview' && (
                 <>
                   <TopCards data={data} mode={mode} />
+                  <ReltSignalCard data={data} />
                   <CandlestickChart data={data} />
                   <SupportResistance data={data} />
                   <AnalysisCards data={data} />

@@ -212,7 +212,185 @@ def evaluate_bsjp_1530(daily_df: pd.DataFrame, reference_price: float) -> Dict[s
     }
 
 
+def evaluate_relt_a_plus(daily_df: pd.DataFrame, reference_price: float) -> Dict[str, Any]:
+    """
+    Evaluasi Saham berdasarkan Strategi RELT SIGNAL - Grade A+ (Score >= 75 & Strong Buy):
+    1. Harga Saham >= Rp 100
+    2. Nilai Transaksi > Rp 1.000.000.000 (1 Miliar)
+    3. RELT Composite Score >= 75%
+    4. Action in ['ULTRA BUY', 'STRONG BUY', 'PULLBACK BUY']
+    """
+    if daily_df is None or daily_df.empty or len(daily_df) < 20:
+        return {"passed": False, "reason": "Data histori kurang dari 20 hari untuk kalkulasi RELT"}
+
+    from services.relt_signal_engine import ReltSignalEngine
+    engine = ReltSignalEngine()
+    relt = engine.analyze(daily_df, reference_price=reference_price, signal_mode="Balanced", entry_mode="Hybrid")
+
+    close_price = relt["trade_setup"]["entry_price"]
+    curr_volume = float(daily_df['Volume'].iloc[-1])
+    total_value = close_price * curr_volume
+
+    if close_price < 100:
+        return {"passed": False, "reason": f"Harga {close_price} < 100"}
+
+    if total_value < 1_000_000_000:
+        return {"passed": False, "reason": f"Nilai transaksi Rp {total_value:,.0f} < Rp 1 Miliar"}
+
+    score = relt["score"]
+    action = relt["action"]
+    if score < 70 or action not in ["ULTRA BUY", "STRONG BUY", "PULLBACK BUY"]:
+        return {"passed": False, "reason": f"RELT Score {score}% ({action}) belum mencapai kriteria Buy Grade"}
+
+    return {
+        "passed": True,
+        "metrics": {
+            "close": close_price,
+            "score": score,
+            "rating": relt["rating"],
+            "action": action,
+            "entry_price": relt["trade_setup"]["entry_price"],
+            "stop_loss": relt["trade_setup"]["stop_loss"],
+            "tp1": relt["trade_setup"]["tp1"],
+            "tp2": relt["trade_setup"]["tp2"],
+            "recommended_lots": relt["trade_setup"]["recommended_lots"],
+            "predicted_upside_pct": relt["direction_prediction"]["upside_pct"],
+            "total_value": int(total_value)
+        }
+    }
+
+
+def evaluate_relt_pullback(daily_df: pd.DataFrame, reference_price: float) -> Dict[str, Any]:
+    """
+    Evaluasi Saham berdasarkan Strategi RELT PULLBACK HUNTER:
+    1. Harga Saham >= Rp 100
+    2. Nilai Transaksi > Rp 1.000.000.000 (1 Miliar)
+    3. Tren EMA Bullish + Koreksi sehat ke EMA + Candle Reversal (Pinbar/Engulfing)
+    """
+    if daily_df is None or daily_df.empty or len(daily_df) < 20:
+        return {"passed": False, "reason": "Data histori kurang dari 20 hari"}
+
+    from services.relt_signal_engine import ReltSignalEngine
+    engine = ReltSignalEngine()
+    relt = engine.analyze(daily_df, reference_price=reference_price, signal_mode="Balanced", entry_mode="Pullback")
+
+    close_price = relt["trade_setup"]["entry_price"]
+    curr_volume = float(daily_df['Volume'].iloc[-1])
+    total_value = close_price * curr_volume
+
+    if close_price < 100:
+        return {"passed": False, "reason": f"Harga {close_price} < 100"}
+
+    if total_value < 1_000_000_000:
+        return {"passed": False, "reason": f"Nilai transaksi Rp {total_value:,.0f} < Rp 1 Miliar"}
+
+    score = relt["score"]
+    action = relt["action"]
+    if action not in ["PULLBACK BUY", "STRONG BUY", "ULTRA BUY"] and score < 60:
+        return {"passed": False, "reason": f"Kriteria Pullback belum terpenuhi (Action: {action}, Score: {score}%)"}
+
+    return {
+        "passed": True,
+        "metrics": {
+            "close": close_price,
+            "score": score,
+            "rating": relt["rating"],
+            "action": action,
+            "entry_price": relt["trade_setup"]["entry_price"],
+            "stop_loss": relt["trade_setup"]["stop_loss"],
+            "tp1": relt["trade_setup"]["tp1"],
+            "tp2": relt["trade_setup"]["tp2"],
+            "recommended_lots": relt["trade_setup"]["recommended_lots"],
+            "total_value": int(total_value)
+        }
+    }
+
+
+def evaluate_relt_smc_breakout(daily_df: pd.DataFrame, reference_price: float) -> Dict[str, Any]:
+    """
+    Evaluasi Saham berdasarkan Smart Money Concepts (SMC) Breakout & Order Block:
+    1. Harga Saham >= Rp 100
+    2. Nilai Transaksi > Rp 1.000.000.000 (1 Miliar)
+    3. Terdeteksi Bullish BOS / Order Block Aktif / Bullish FVG / Liquidity Sweep Low
+    """
+    if daily_df is None or daily_df.empty or len(daily_df) < 20:
+        return {"passed": False, "reason": "Data histori kurang dari 20 hari"}
+
+    from services.relt_signal_engine import ReltSignalEngine
+    engine = ReltSignalEngine()
+    relt = engine.analyze(daily_df, reference_price=reference_price, signal_mode="Balanced", entry_mode="Hybrid")
+
+    close_price = relt["trade_setup"]["entry_price"]
+    curr_volume = float(daily_df['Volume'].iloc[-1])
+    total_value = close_price * curr_volume
+
+    if close_price < 100:
+        return {"passed": False, "reason": f"Harga {close_price} < 100"}
+
+    if total_value < 1_000_000_000:
+        return {"passed": False, "reason": f"Nilai transaksi Rp {total_value:,.0f} < Rp 1 Miliar"}
+
+    smc = relt["smc"]
+    has_smc_trigger = smc["smart_money_buy"] or smc["bos_bull"] or smc["bullish_ob_active"] or smc["liquidity_sweep_low"] or smc["breakout_up"]
+
+    if not has_smc_trigger:
+        return {"passed": False, "reason": "Tidak ada sinyal konfirmasi Smart Money (OB/BOS/Sweep/Breakout)"}
+
+    return {
+        "passed": True,
+        "metrics": {
+            "close": close_price,
+            "score": relt["score"],
+            "rating": relt["rating"],
+            "action": relt["action"],
+            "smart_money_buy": smc["smart_money_buy"],
+            "bos_bull": smc["bos_bull"],
+            "bullish_ob": smc["bullish_ob_active"],
+            "liquidity_sweep_low": smc["liquidity_sweep_low"],
+            "entry_price": relt["trade_setup"]["entry_price"],
+            "stop_loss": relt["trade_setup"]["stop_loss"],
+            "tp1": relt["trade_setup"]["tp1"],
+            "total_value": int(total_value)
+        }
+    }
+
+
 SCREENER_REGISTRY = {
+    "relt_a_plus": {
+        "id": "relt_a_plus",
+        "name": "RELT Setup Grade A+ (Score >= 75)",
+        "description": "Screener otomatis strategi komposit RELT SIGNAL untuk setup momentum & trend terkonfirmasi Grade A+/A.",
+        "evaluator": evaluate_relt_a_plus,
+        "rules": [
+            "Harga Saham >= Rp 100",
+            "Nilai Transaksi > Rp 1.000.000.000",
+            "RELT Composite Score >= 75%",
+            "Action Status: ULTRA BUY / STRONG BUY / PULLBACK BUY"
+        ]
+    },
+    "relt_pullback": {
+        "id": "relt_pullback",
+        "name": "RELT Pullback Hunter",
+        "description": "Screener saham yang berada dalam tren naik sehat dan sedang membentuk candle pembalikan (Pinbar/Engulfing) di area EMA.",
+        "evaluator": evaluate_relt_pullback,
+        "rules": [
+            "Harga Saham >= Rp 100",
+            "Nilai Transaksi > Rp 1.000.000.000",
+            "Tren EMA Bullish (EMA Fast > EMA Slow)",
+            "Retest Area EMA + Candle Reversal Rebound"
+        ]
+    },
+    "relt_smc_breakout": {
+        "id": "relt_smc_breakout",
+        "name": "Smart Money & FVG Breakout",
+        "description": "Screener konfirmasi jejak institusional (Order Block, Fair Value Gap, Bullish BOS, Liquidity Sweep).",
+        "evaluator": evaluate_relt_smc_breakout,
+        "rules": [
+            "Harga Saham >= Rp 100",
+            "Nilai Transaksi > Rp 1.000.000.000",
+            "Konfirmasi Bullish BOS / Order Block / FVG / Sweep Low"
+        ]
+    },
     "bpjs_daytrade": {
         "id": "bpjs_daytrade",
         "name": "BPJS (09.05-09.20)",
@@ -265,3 +443,4 @@ def get_available_custom_screeners() -> List[Dict[str, Any]]:
             "rules": s_info["rules"]
         })
     return output
+
