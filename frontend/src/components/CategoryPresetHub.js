@@ -17,7 +17,7 @@ const CATEGORIES = [
   },
   {
     id: 'relt_pullback',
-    label: 'RELT Pullback Hunter',
+    label: 'RELT Pullback Hunter (≥60%)',
     badge: 'EMA Retest Rebound',
     icon: Crosshair,
     color: '#38bdf8',
@@ -277,7 +277,7 @@ export default function CategoryPresetHub({ onTickerClick, mode = 'live' }) {
                     fontWeight: 'bold'
                   }}
                 >
-                  {cat.id === 'screener' ? 'Custom' : cat.tickers.length}
+                  {cat.id === 'screener' ? 'Custom' : (categoryData[cat.id] ? categoryData[cat.id].length : cat.tickers.length)}
                 </span>
               </button>
             );

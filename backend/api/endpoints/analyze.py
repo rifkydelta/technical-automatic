@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from models.request import AnalyzeRequest, ScreenerRequest, CustomScreenerExecuteRequest
-from models.response import AnalyzeResponse, OHLCVBar, SessionInfo, ScreenerResponse, ScreenerResult, FairValueAnalysis, GrowthAnalysis, AnalystTargetInfo, ValuationModelResult, ReltSignalResult
+from models.response import AnalyzeResponse, OHLCVBar, SessionInfo, ScreenerResponse, ScreenerResult, FairValueAnalysis, GrowthAnalysis, AnalystTargetInfo, ValuationModelResult, ReltSignalResult, DetectedPattern
+import pandas as pd
 from services.data_fetcher import DataFetcher
 from services.indicator_engine import IndicatorEngine
 from services.analysis_engine import AnalysisEngine
@@ -82,9 +83,10 @@ async def analyze_ticker(request: AnalyzeRequest):
         warnings.append("Intraday data (1H/15M) not fully available. Using Daily fallback.")
     
     # 3. Get reference price based on mode (fresh intraday fetch for session modes)
-    live_price = info.get("last_price")
+    live_price_raw = info.get("last_price")
+    live_price = float(live_price_raw) if live_price_raw is not None else 0.0
     ref = session_svc.get_reference_data(mode, ticker, live_price, daily_df)
-    reference_price = ref["price"]
+    reference_price = float(ref["price"])
 
     # 4. Calculate Fair Value & Valuation Models
     rev_cagr = growth_info.get("revenue_cagr_3y_pct")
@@ -110,13 +112,20 @@ async def analyze_ticker(request: AnalyzeRequest):
         ) for m in fair_value_raw.get("models", [])
     ]
 
+    consolidated_fv = fair_value_raw.get("consolidated_fair_value")
+    fv_min = fair_value_raw.get("fair_value_min")
+    fv_max = fair_value_raw.get("fair_value_max")
+    mos_pct = fair_value_raw.get("margin_of_safety_pct")
+    overall_status = fair_value_raw.get("overall_status")
+    val_badge = fair_value_raw.get("valuation_badge")
+
     fair_value_analysis = FairValueAnalysis(
-        consolidated_fair_value=fair_value_raw.get("consolidated_fair_value", reference_price),
-        fair_value_min=fair_value_raw.get("fair_value_min", reference_price),
-        fair_value_max=fair_value_raw.get("fair_value_max", reference_price),
-        margin_of_safety_pct=fair_value_raw.get("margin_of_safety_pct", 0.0),
-        overall_status=fair_value_raw.get("overall_status", "Neutral"),
-        valuation_badge=fair_value_raw.get("valuation_badge", "FAIR VALUE"),
+        consolidated_fair_value=consolidated_fv if consolidated_fv is not None else reference_price,
+        fair_value_min=fv_min if fv_min is not None else reference_price,
+        fair_value_max=fv_max if fv_max is not None else reference_price,
+        margin_of_safety_pct=mos_pct if mos_pct is not None else 0.0,
+        overall_status=overall_status if overall_status is not None else "Neutral",
+        valuation_badge=val_badge if val_badge is not None else "FAIR VALUE",
         models=models_list
     )
 
@@ -274,19 +283,36 @@ async def analyze_ticker(request: AnalyzeRequest):
     ind = ind_engine.calculate_all(daily_df)
     
     # 5. Run Analysis Pipeline — ALL steps use reference_price instead of last_price
-    trend = analysis_engine.step1_analyze_trend(reference_price, ind.get('ema20'), ind.get('ema50'), ind.get('ema200'))
+    ema20 = float(ind.get('ema20') or 0.0)
+    ema50 = float(ind.get('ema50') or 0.0)
+    ema200 = float(ind.get('ema200') or 0.0)
+    trend = analysis_engine.step1_analyze_trend(reference_price, ema20, ema50, ema200)
     ms = analysis_engine.step2_market_structure(daily_df)
     sr = analysis_engine.step3_support_resistance(daily_df)
-    mtf = analysis_engine.step4_multi_timeframe(daily_df, h1_df, m15_df)
+    
+    h1_df_safe = h1_df if h1_df is not None else pd.DataFrame()
+    m15_df_safe = m15_df if m15_df is not None else pd.DataFrame()
+    mtf = analysis_engine.step4_multi_timeframe(daily_df, h1_df_safe, m15_df_safe)
     
     # recreate IndicatorSet for step5
     from models.response import IndicatorSet
     ind_obj = IndicatorSet(**ind)
     momentum = analysis_engine.step5_momentum(ind_obj)
     
-    entry = analysis_engine.step6_entry_analysis(reference_price, sr, ind.get('atr'))
+    atr = float(ind.get('atr') or 0.0)
+    entry = analysis_engine.step6_entry_analysis(reference_price, sr, atr)
     risk = analysis_engine.step7_risk_management(reference_price, sr)
-    order_flow = analysis_engine.step8_order_flow(request.order_flow, data.get("m1"))
+    
+    from models.request import OrderFlowInput
+    req_order_flow = request.order_flow if request.order_flow is not None else OrderFlowInput(
+        broker_summary=None, broker_summary_value=None,
+        foreign_flow=None, foreign_flow_value=None,
+        running_trade=None, running_trade_pct=None,
+        big_lot=None
+    )
+    m1_df_safe = data.get("m1")
+    m1_df_safe = m1_df_safe if m1_df_safe is not None else pd.DataFrame()
+    order_flow = analysis_engine.step8_order_flow(req_order_flow, m1_df_safe)
     scenarios = analysis_engine.step9_scenarios(trend, reference_price, sr)
     
     # Calculate Score and Recommendation FIRST so we can filter risky setups
@@ -315,12 +341,12 @@ async def analyze_ticker(request: AnalyzeRequest):
     # Calculate Extended Technical Details
     ext_ind = ind_engine.calculate_extended(daily_df)
     ext_ind.update(ind)
-    technical_detail = analysis_engine.step10_technical_detail(reference_price, daily_df, ext_ind, sr, risk, trend, m15_df, ref.get("target_date", ""), rec)
+    technical_detail = analysis_engine.step10_technical_detail(reference_price, daily_df, ext_ind, sr, risk, trend, m15_df_safe, ref.get("target_date", ""), rec)
     
     # 8. Build session info
     session_info = SessionInfo(
         mode=mode,
-        mode_label=ref["label"],
+        mode_label=ref.get("label", "Live"),
         market_phase=session_svc.get_current_market_phase(),
         available_modes=available_modes,
         reference_ohlcv=ref.get("ohlcv")
@@ -350,17 +376,20 @@ async def analyze_ticker(request: AnalyzeRequest):
     )
     relt_signal_obj = ReltSignalResult(**relt_raw)
 
+    c_name = info.get("name")
+    c_sector = info.get("sector")
+    
     # Assemble response
     return AnalyzeResponse(
         ticker=ticker,
-        company_name=info.get("name"),
-        sector=info.get("sector"),
+        company_name=c_name if c_name is not None else ticker,
+        sector=c_sector if c_sector is not None else "Unknown",
         date=datetime.datetime.now().strftime("%d %B %Y - %H:%M"),
         last_price=reference_price,
         company_profile=company_profile,
-        ohlcv_daily=df_to_ohlcv(daily_df),
-        ohlcv_1h=df_to_ohlcv(h1_df),
-        ohlcv_15m=df_to_ohlcv(m15_df),
+        ohlcv_daily=df_to_ohlcv(daily_df) or [],
+        ohlcv_1h=df_to_ohlcv(h1_df) or [],
+        ohlcv_15m=df_to_ohlcv(m15_df) or [],
         indicators=ind_obj,
         trend_analysis=trend,
         market_structure=ms,
@@ -384,7 +413,7 @@ async def analyze_ticker(request: AnalyzeRequest):
         warnings=warnings,
         technical_detail=technical_detail,
         session_info=session_info,
-        detected_patterns=detected_patterns,
+        detected_patterns=[DetectedPattern(**p) for p in detected_patterns] if detected_patterns else [],
         relt_signal=relt_signal_obj
     )
 
@@ -401,11 +430,16 @@ async def analyze_screener(request: ScreenerRequest):
             daily_df = fetcher.fetch_daily_only(ticker)
             
             # Apply Session Filtering for Screener
-            ref = session_svc.get_reference_data(mode, ticker, info.get("last_price"), daily_df)
-            reference_price = ref["price"]
+            live_price_raw = info.get("last_price")
+            live_price = float(live_price_raw) if live_price_raw is not None else 0.0
+            ref = session_svc.get_reference_data(mode, ticker, live_price, daily_df)
+            reference_price = float(ref["price"])
             
             ind = ind_engine.calculate_all(daily_df)
-            trend = analysis_engine.step1_analyze_trend(reference_price, ind.get('ema20'), ind.get('ema50'), ind.get('ema200'))
+            ema20 = float(ind.get('ema20') or 0.0)
+            ema50 = float(ind.get('ema50') or 0.0)
+            ema200 = float(ind.get('ema200') or 0.0)
+            trend = analysis_engine.step1_analyze_trend(reference_price, ema20, ema50, ema200)
             sr = analysis_engine.step3_support_resistance(daily_df)
             
             from models.response import IndicatorSet, MultiTimeframeResult, OrderFlowResult
@@ -466,7 +500,7 @@ async def analyze_screener(request: ScreenerRequest):
 
             return ScreenerResult(
                 ticker=ticker,
-                company_name=info.get("name", ticker),
+                company_name=info.get("name") if info.get("name") is not None else ticker,
                 last_price=reference_price,
                 change_pct=change_pct,
                 volume=int(current_volume),
@@ -556,7 +590,10 @@ async def analyze_custom_screener(request: CustomScreenerExecuteRequest):
 
             # Also calculate score & trend for complete dashboard integration
             ind = ind_engine.calculate_all(daily_df)
-            trend = analysis_engine.step1_analyze_trend(last_close, ind.get('ema20'), ind.get('ema50'), ind.get('ema200'))
+            ema20 = float(ind.get('ema20') or 0.0)
+            ema50 = float(ind.get('ema50') or 0.0)
+            ema200 = float(ind.get('ema200') or 0.0)
+            trend = analysis_engine.step1_analyze_trend(last_close, ema20, ema50, ema200)
             sr = analysis_engine.step3_support_resistance(daily_df)
 
             from models.response import IndicatorSet, MultiTimeframeResult, OrderFlowResult
@@ -596,7 +633,20 @@ async def analyze_custom_screener(request: CustomScreenerExecuteRequest):
 
             change_pct = metrics.get("change_pct", 0.0)
             prefix = "BSJP" if screener_id == "bsjp_1530" else "OPENING" if screener_id == "opening_0858" else "BPJS" if screener_id == "bpjs_daytrade" else "PRESET"
-            rec_badge = f"{prefix} PASS • {rec}"
+            
+            is_relt = screener_id.startswith("relt_")
+            if is_relt:
+                prefix = "RELT"
+                
+            action = metrics.get("action", rec)
+            rec_badge = f"{prefix} PASS • {action}"
+            
+            if is_relt and "score" in metrics:
+                final_score = metrics["score"]
+                final_score_display = f"{final_score}%"
+            else:
+                final_score = score.score
+                final_score_display = score.score_display
 
             return ScreenerResult(
                 ticker=ticker,
@@ -607,8 +657,8 @@ async def analyze_custom_screener(request: CustomScreenerExecuteRequest):
                 avg_volume=avg_volume,
                 trend=trend.trend_besar,
                 recommendation=rec_badge,
-                score=score.score,
-                score_display=score.score_display,
+                score=final_score,
+                score_display=final_score_display,
                 risk_status="Good Setup"
             )
         except Exception:

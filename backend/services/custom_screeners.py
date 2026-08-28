@@ -4,7 +4,14 @@ Memproses evaluasi kriteria screener kustom seperti DAYTRADE BPJS (09.05-09.20).
 """
 
 import pandas as pd
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable, TypedDict
+
+class ScreenerDef(TypedDict):
+    id: str
+    name: str
+    description: str
+    evaluator: Callable[[pd.DataFrame, float], Dict[str, Any]]
+    rules: List[str]
 
 def evaluate_bpjs_daytrade(daily_df: pd.DataFrame, reference_price: float) -> Dict[str, Any]:
     """
@@ -229,6 +236,8 @@ def evaluate_relt_a_plus(daily_df: pd.DataFrame, reference_price: float) -> Dict
 
     close_price = relt["trade_setup"]["entry_price"]
     curr_volume = float(daily_df['Volume'].iloc[-1])
+    prev_close = float(daily_df['Close'].iloc[-2]) if len(daily_df) > 1 else close_price
+    change_pct = ((close_price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
     total_value = close_price * curr_volume
 
     if close_price < 100:
@@ -246,6 +255,8 @@ def evaluate_relt_a_plus(daily_df: pd.DataFrame, reference_price: float) -> Dict
         "passed": True,
         "metrics": {
             "close": close_price,
+            "change_pct": round(change_pct, 2),
+            "volume": int(curr_volume),
             "score": score,
             "rating": relt["rating"],
             "action": action,
@@ -276,6 +287,8 @@ def evaluate_relt_pullback(daily_df: pd.DataFrame, reference_price: float) -> Di
 
     close_price = relt["trade_setup"]["entry_price"]
     curr_volume = float(daily_df['Volume'].iloc[-1])
+    prev_close = float(daily_df['Close'].iloc[-2]) if len(daily_df) > 1 else close_price
+    change_pct = ((close_price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
     total_value = close_price * curr_volume
 
     if close_price < 100:
@@ -293,6 +306,8 @@ def evaluate_relt_pullback(daily_df: pd.DataFrame, reference_price: float) -> Di
         "passed": True,
         "metrics": {
             "close": close_price,
+            "change_pct": round(change_pct, 2),
+            "volume": int(curr_volume),
             "score": score,
             "rating": relt["rating"],
             "action": action,
@@ -322,6 +337,8 @@ def evaluate_relt_smc_breakout(daily_df: pd.DataFrame, reference_price: float) -
 
     close_price = relt["trade_setup"]["entry_price"]
     curr_volume = float(daily_df['Volume'].iloc[-1])
+    prev_close = float(daily_df['Close'].iloc[-2]) if len(daily_df) > 1 else close_price
+    change_pct = ((close_price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
     total_value = close_price * curr_volume
 
     if close_price < 100:
@@ -340,6 +357,8 @@ def evaluate_relt_smc_breakout(daily_df: pd.DataFrame, reference_price: float) -
         "passed": True,
         "metrics": {
             "close": close_price,
+            "change_pct": round(change_pct, 2),
+            "volume": int(curr_volume),
             "score": relt["score"],
             "rating": relt["rating"],
             "action": relt["action"],
@@ -355,7 +374,7 @@ def evaluate_relt_smc_breakout(daily_df: pd.DataFrame, reference_price: float) -
     }
 
 
-SCREENER_REGISTRY = {
+SCREENER_REGISTRY: Dict[str, ScreenerDef] = {
     "relt_a_plus": {
         "id": "relt_a_plus",
         "name": "RELT Setup Grade A+ (Score >= 75)",
