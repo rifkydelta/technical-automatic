@@ -473,20 +473,40 @@ export default function CandlestickChart({ data }) {
     // Initial view fit
     chart.timeScale().fitContent();
 
-    // Resize Handler
+    // Resize Handler with ResizeObserver for seamless tab-switching
     const handleResize = () => {
       if (chartContainerRef.current && chartInstanceRef.current) {
-        chartInstanceRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-          height: isFullscreen ? (window.innerHeight - 140) : 520,
-        });
+        const clientW = chartContainerRef.current.clientWidth;
+        if (clientW > 0) {
+          chartInstanceRef.current.applyOptions({
+            width: clientW,
+            height: isFullscreen ? (window.innerHeight - 140) : 520,
+          });
+        }
       }
     };
 
     window.addEventListener('resize', handleResize);
 
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (entries.length > 0 && chartContainerRef.current && chartInstanceRef.current) {
+        const { width } = entries[0].contentRect;
+        if (width > 0) {
+          chartInstanceRef.current.applyOptions({
+            width: width,
+            height: isFullscreen ? (window.innerHeight - 140) : 520,
+          });
+        }
+      }
+    });
+
+    if (chartContainerRef.current) {
+      resizeObserver.observe(chartContainerRef.current);
+    }
+
     return () => {
       window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       if (chartInstanceRef.current) {
         chartInstanceRef.current.remove();
         chartInstanceRef.current = null;

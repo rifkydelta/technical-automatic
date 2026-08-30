@@ -20,6 +20,8 @@ import {
 export default function SignalTable({ signals = [], onRowClick, onTickerSelect }) {
   const [sortField, setSortField] = useState('relt_score');
   const [sortDirection, setSortDirection] = useState('desc');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('ALL');
 
   const handleSort = (field) => {
     if (sortField === field) {
@@ -30,7 +32,29 @@ export default function SignalTable({ signals = [], onRowClick, onTickerSelect }
     }
   };
 
-  const sortedSignals = [...signals].sort((a, b) => {
+  const filteredSignals = signals.filter((item) => {
+    // 1. Search Query Filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toUpperCase();
+      const matchTicker = item.ticker?.toUpperCase().includes(q);
+      const matchName = item.company_name?.toUpperCase().includes(q);
+      if (!matchTicker && !matchName) return false;
+    }
+
+    // 2. Category / Status Filter
+    if (filterCategory === 'OPEN') return item.status === 'OPEN';
+    if (filterCategory === 'GRADE_A') return item.relt_rating?.includes('A');
+    if (filterCategory === 'STRONG_BUY') {
+      const act = item.relt_action?.toUpperCase() || '';
+      return act.includes('STRONG') || act.includes('ULTRA');
+    }
+    if (filterCategory === 'HIT_TP') return item.status === 'HIT_TP1' || item.status === 'HIT_TP2';
+    if (filterCategory === 'HIT_SL') return item.status === 'HIT_SL';
+
+    return true;
+  });
+
+  const sortedSignals = [...filteredSignals].sort((a, b) => {
     let aVal = a[sortField];
     let bVal = b[sortField];
 
@@ -44,6 +68,22 @@ export default function SignalTable({ signals = [], onRowClick, onTickerSelect }
     if (sortField !== field) return null;
     return sortDirection === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />;
   };
+
+  // Counts for filter pills
+  const countOpen = signals.filter(s => s.status === 'OPEN').length;
+  const countGradeA = signals.filter(s => s.relt_rating?.includes('A')).length;
+  const countUltra = signals.filter(s => (s.relt_action || '').includes('STRONG') || (s.relt_action || '').includes('ULTRA')).length;
+  const countTP = signals.filter(s => s.status === 'HIT_TP1' || s.status === 'HIT_TP2').length;
+  const countSL = signals.filter(s => s.status === 'HIT_SL').length;
+
+  const FILTER_PILLS = [
+    { id: 'ALL', label: 'Semua Sinyal', count: signals.length },
+    { id: 'OPEN', label: '🟢 Hanya OPEN', count: countOpen, color: 'var(--bullish)' },
+    { id: 'GRADE_A', label: '⭐ Grade A / A+', count: countGradeA, color: '#60a5fa' },
+    { id: 'STRONG_BUY', label: '⚡ Ultra / Strong Buy', count: countUltra, color: '#38bdf8' },
+    { id: 'HIT_TP', label: '🎯 Target Hit (TP)', count: countTP, color: '#4ade80' },
+    { id: 'HIT_SL', label: '🛑 Stop Loss Hit', count: countSL, color: '#f43f5e' },
+  ];
 
   if (!signals || signals.length === 0) {
     return (
@@ -70,7 +110,86 @@ export default function SignalTable({ signals = [], onRowClick, onTickerSelect }
   }
 
   return (
-    <div style={{ overflowX: 'auto', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      {/* Interactive Search & Filter Toolbar */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          padding: '14px 18px',
+          borderRadius: '16px',
+          backgroundColor: 'rgba(255, 255, 255, 0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          backdropFilter: 'blur(10px)'
+        }}
+      >
+        {/* Filter Pills */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+          {FILTER_PILLS.map((pill) => {
+            const isActive = filterCategory === pill.id;
+            return (
+              <button
+                key={pill.id}
+                onClick={() => setFilterCategory(pill.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '10px',
+                  fontSize: '11.5px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  border: isActive ? `1px solid ${pill.color || '#ffffff'}` : '1px solid rgba(255, 255, 255, 0.08)',
+                  backgroundColor: isActive ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.25)',
+                  color: isActive ? '#ffffff' : 'var(--text-secondary)',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <span>{pill.label}</span>
+                <span
+                  style={{
+                    padding: '1px 6px',
+                    borderRadius: '12px',
+                    fontSize: '10px',
+                    backgroundColor: isActive ? 'rgba(255, 255, 255, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                    color: isActive ? '#ffffff' : 'var(--text-muted)'
+                  }}
+                >
+                  {pill.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Ticker Search Box */}
+        <div style={{ minWidth: '220px', flex: '1 1 220px', maxWidth: '340px' }}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Cari kode saham (misal: VKTR, BBCA)..."
+            style={{
+              width: '100%',
+              padding: '8px 14px',
+              borderRadius: '10px',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              backgroundColor: 'rgba(0, 0, 0, 0.35)',
+              color: '#ffffff',
+              fontSize: '12px',
+              fontFamily: 'var(--font-mono)',
+              outline: 'none'
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Main Signal Table Container */}
+      <div style={{ overflowX: 'auto', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
       <table
         className="signal-table"
         style={{
@@ -180,14 +299,15 @@ export default function SignalTable({ signals = [], onRowClick, onTickerSelect }
             const rawDate = item.signal_date || (item.signal_time ? item.signal_time.slice(0, 10) : '');
             let dateFormatted = '';
             if (rawDate && rawDate.includes('-')) {
-              const [y, m, d] = rawDate.split('-');
+              const datePart = rawDate.split(' ')[0];
+              const [y, m, d] = datePart.split('-');
               const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
               const mIdx = parseInt(m, 10);
               dateFormatted = `${parseInt(d, 10)} ${monthNames[mIdx] || m}`;
             }
-            const timeFormatted = item.signal_time?.includes(' ')
-              ? item.signal_time.split(' ')[1]?.slice(0, 5)
-              : item.signal_time?.slice(11, 16) || '16:00';
+            const timeFormatted = item.signal_time
+              ? (item.signal_time.trim().split(' ').pop()?.slice(0, 5) || '16:00')
+              : '16:00';
             
             const isOpen = item.status === 'OPEN';
             const pnlVal = isOpen ? (item.projected_pnl_pct || 0) : (item.actual_pnl_pct || 0);
@@ -485,6 +605,7 @@ export default function SignalTable({ signals = [], onRowClick, onTickerSelect }
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

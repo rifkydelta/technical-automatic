@@ -12,9 +12,7 @@ export default function IHSGCard() {
     const tick = () => {
       const now = new Date();
       setTime(
-        now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + 
-        ' - ' + 
-        now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' WIB'
       );
     };
     tick();
@@ -33,7 +31,7 @@ export default function IHSGCard() {
           setData(json);
         }
       } catch (err) {
-        console.error("Failed to fetch IHSG:", err);
+        // silently ignore polling error
       } finally {
         if (loading) setLoading(false);
       }
@@ -46,32 +44,26 @@ export default function IHSGCard() {
 
   if (loading && !data) {
     return (
-      <div style={{
-        maxWidth: '440px',
-        width: '100%',
-        marginBottom: '24px',
-        padding: '16px 24px',
-        backgroundColor: 'rgba(255,255,255,0.02)',
-        border: '1px solid rgba(255,255,255,0.05)',
-        borderRadius: '12px',
-        backdropFilter: 'blur(10px)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        animation: 'skeleton-pulse 2s infinite',
-      }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div style={{ width: '4px', height: '14px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '2px' }} />
-            <div style={{ width: '130px', height: '12px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '4px' }} />
-          </div>
-          <div style={{ width: '160px', height: '28px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '6px' }} />
+      <div
+        style={{
+          width: '100%',
+          marginBottom: '14px',
+          padding: '14px 20px',
+          backgroundColor: 'rgba(255, 255, 255, 0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.06)',
+          borderRadius: '16px',
+          backdropFilter: 'blur(10px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          animation: 'skeleton-pulse 2s infinite',
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ width: '110px', height: '10px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '4px' }} />
+          <div style={{ width: '130px', height: '24px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '6px' }} />
         </div>
-        
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '12px' }}>
-          <div style={{ width: '120px', height: '26px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '20px' }} />
-          <div style={{ width: '140px', height: '10px', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '4px' }} />
-        </div>
+        <div style={{ width: '110px', height: '24px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '20px' }} />
       </div>
     );
   }
@@ -84,46 +76,55 @@ export default function IHSGCard() {
   const sign = isUp ? '+' : '';
 
   return (
-    <div style={{
-      maxWidth: '440px',
-      width: '100%',
-      marginBottom: '24px',
-      padding: '16px 24px',
-      backgroundColor: 'rgba(255,255,255,0.02)',
-      border: '1px solid rgba(255,255,255,0.05)',
-      borderRadius: '12px',
-      backdropFilter: 'blur(10px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
-    }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <span style={{ fontSize: '12px', fontWeight: '700', letterSpacing: '0.1em', color: 'var(--text-primary)' }}>
-            IHSG (COMPOSITE)
+    <div
+      style={{
+        width: '100%',
+        marginBottom: '14px',
+        padding: '14px 20px',
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        backdropFilter: 'blur(12px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)',
+        transition: 'border-color 0.2s ease'
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div className="live-dot" style={{ width: '5px', height: '5px', borderRadius: '50%' }} />
+          <span style={{ fontSize: '10px', fontWeight: '800', letterSpacing: '0.08em', color: 'var(--text-muted)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>
+            IHSG • COMPOSITE
           </span>
-        <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', lineHeight: '1' }}>
+        </div>
+        <div style={{ fontSize: '24px', fontWeight: '900', color: '#ffffff', fontFamily: 'var(--font-mono)', lineHeight: '1.1' }}>
           {data.price.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </div>
       </div>
       
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-        <div style={{ 
-          display: 'flex', alignItems: 'center', gap: '6px', 
-          backgroundColor: isUp ? 'rgba(0,255,128,0.1)' : 'rgba(244,63,94,0.1)',
-          padding: '6px 12px',
-          borderRadius: '20px',
-          color, 
-          border: `1px solid ${isUp ? 'rgba(0,255,128,0.2)' : 'rgba(244,63,94,0.2)'}`
-        }}>
-          <Icon size={14} strokeWidth={3} />
-          <span style={{ fontSize: '13px', fontWeight: '700', fontFamily: 'var(--font-mono)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+        <div
+          style={{ 
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px', 
+            backgroundColor: isUp ? 'rgba(74, 222, 128, 0.12)' : 'rgba(244, 63, 94, 0.12)',
+            padding: '4px 10px',
+            borderRadius: '20px',
+            color: color, 
+            border: `1px solid ${isUp ? 'rgba(74, 222, 128, 0.25)' : 'rgba(244, 63, 94, 0.25)'}`
+          }}
+        >
+          <Icon size={12} strokeWidth={2.5} />
+          <span style={{ fontSize: '12px', fontWeight: '800', fontFamily: 'var(--font-mono)' }}>
             {sign}{data.change.toLocaleString('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({sign}{data.change_pct.toFixed(2)}%)
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)' }}>
-          <Clock size={10} />
-          <span style={{ fontSize: '10px', whiteSpace: 'nowrap' }}>{time || data.timestamp}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', fontSize: '9.5px', fontFamily: 'var(--font-mono)' }}>
+          <Clock size={9} />
+          <span>{time}</span>
         </div>
       </div>
     </div>

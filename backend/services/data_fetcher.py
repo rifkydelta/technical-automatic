@@ -1,6 +1,7 @@
+import time
 import yfinance as yf
 import pandas as pd
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, cast
 
 def normalize_dividend_yield(raw_yield: Any, dps: Any = None, current_price: Any = None) -> Optional[float]:
     """
@@ -31,14 +32,37 @@ def normalize_dividend_yield(raw_yield: Any, dps: Any = None, current_price: Any
     return None
 
 class DataFetcher:
+    _cache: Dict[str, Any] = {}
+    _cache_ttl: float = 30.0  # 30 seconds TTL
+
     def __init__(self):
         pass
+
+    def _get_from_cache(self, key: str) -> Optional[Any]:
+        if key in self._cache:
+            entry = self._cache[key]
+            if (time.time() - entry["ts"]) < self._cache_ttl:
+                return entry["data"]
+            else:
+                del self._cache[key]
+        return None
+
+    def _set_cache(self, key: str, data: Any):
+        self._cache[key] = {
+            "ts": time.time(),
+            "data": data
+        }
 
     def fetch_ticker_info(self, ticker: str) -> Dict[str, Any]:
         """
         Fetch basic and profile information about the ticker.
         Handles crumb and 401 errors gracefully with fast_info fallback.
         """
+        cache_key = f"info_{ticker.upper()}"
+        cached = self._get_from_cache(cache_key)
+        if cached is not None:
+            return cached
+
         yf_ticker = f"{ticker}.JK"
         stock = yf.Ticker(yf_ticker)
         
@@ -90,7 +114,7 @@ class DataFetcher:
         except Exception:
             pass
 
-        return {
+        res = {
             "name": name,
             "sector": sector,
             "industry": industry,
@@ -112,11 +136,18 @@ class DataFetcher:
             },
             "is_valid": True if price > 0 or name != ticker else False
         }
+        self._set_cache(cache_key, res)
+        return res
 
     def fetch_daily_only(self, ticker: str) -> Optional[pd.DataFrame]:
         """
         Fetch only Daily data to save bandwidth for the screener.
         """
+        cache_key = f"daily_{ticker.upper()}"
+        cached = self._get_from_cache(cache_key)
+        if cached is not None:
+            return cached
+
         yf_ticker = f"{ticker}.JK"
         try:
             daily_df = yf.download(yf_ticker, period="1y", interval="1d", progress=False)
@@ -124,6 +155,7 @@ class DataFetcher:
                 return None
             if isinstance(daily_df.columns, pd.MultiIndex):
                 daily_df.columns = daily_df.columns.get_level_values(0)
+            self._set_cache(cache_key, daily_df)
             return daily_df
         except Exception:
             return None
@@ -164,6 +196,11 @@ class DataFetcher:
         """
         Fetch Daily, 1H, and 15M OHLCV data safely with robust error handling.
         """
+        cache_key = f"stock_{ticker.upper()}"
+        cached = self._get_from_cache(cache_key)
+        if cached is not None:
+            return cached
+
         yf_ticker = f"{ticker}.JK"
         
         # 1. Daily data (1 year for EMA200)
@@ -201,12 +238,14 @@ class DataFetcher:
         except Exception:
             pass
         
-        return {
+        res = {
             "daily": self._format_dataframe(daily_df),
             "h1": self._format_dataframe(h1_df) if not h1_df.empty else None,
             "m15": self._format_dataframe(m15_df) if not m15_df.empty else None,
             "m1": self._format_dataframe(m1_df) if not m1_df.empty else None,
         }
+        self._set_cache(cache_key, res)
+        return res
 
     def _format_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         if df.empty:
@@ -217,12 +256,12 @@ class DataFetcher:
             df.columns = df.columns.droplevel(1)
             
         # Clean up column names
-        df = df[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
+        formatted_df = cast(pd.DataFrame, df[['Open', 'High', 'Low', 'Close', 'Volume']].copy())
         
         # Drop rows with NaN in critical columns
-        df = df.dropna(subset=['Close'])
+        formatted_df = formatted_df.dropna(subset=['Close'])
         
-        return df
+        return formatted_df
 
     def fetch_yearly_financials(self, ticker: str) -> list:
         """
@@ -240,10 +279,13 @@ class DataFetcher:
             
             yearly_divs = {}
             if divs is not None and not divs.empty:
-                div_series = pd.to_datetime(divs.index, utc=True)
-                for i in range(len(divs)):
-                    y = str(div_series[i].year)
-                    yearly_divs[y] = yearly_divs.get(y, 0) + divs.iloc[i]
+                for dt, amount in divs.items():
+                    try:
+                        y = str(pd.to_datetime(dt).year)
+                        val = float(amount) if pd.notna(amount) else 0.0
+                        yearly_divs[y] = yearly_divs.get(y, 0.0) + val
+                    except Exception:
+                        continue
             
             if inc_stmt is None or inc_stmt.empty:
                 return financials_list
@@ -254,7 +296,10 @@ class DataFetcher:
             dates = sorted(dates, reverse=True)
             
             for date in dates[:3]:
-                year = str(date.year)
+                try:
+                    year = str(pd.to_datetime(date).year)
+                except Exception:
+                    year = str(date)[:4]
                 inc_col = inc_stmt[date] if date in inc_stmt.columns else pd.Series()
                 bs_col = bs[date] if bs is not None and date in bs.columns else pd.Series()
                 cf_col = cf[date] if cf is not None and date in cf.columns else pd.Series()
@@ -272,25 +317,39 @@ class DataFetcher:
                 fcf = cf_col.get('Free Cash Flow')
                 
                 def format_money(val):
-                    if pd.isna(val) or val is None:
+                    if val is None or pd.isna(val):
                         return "N/A"
-                    if val >= 1e12 or val <= -1e12:
-                        return f"Rp{val/1e12:.1f}T"
-                    elif val >= 1e9 or val <= -1e9:
-                        return f"Rp{val/1e9:.1f}B"
-                    elif val >= 1e6 or val <= -1e6:
-                        return f"Rp{val/1e6:.1f}M"
+                    try:
+                        v = float(val)
+                    except (ValueError, TypeError):
+                        return "N/A"
+                    if v >= 1e12 or v <= -1e12:
+                        return f"Rp{v/1e12:.1f}T"
+                    elif v >= 1e9 or v <= -1e9:
+                        return f"Rp{v/1e9:.1f}B"
+                    elif v >= 1e6 or v <= -1e6:
+                        return f"Rp{v/1e6:.1f}M"
                     else:
-                        return f"Rp{val:,.0f}"
+                        return f"Rp{v:,.0f}"
                         
                 def format_num(val):
-                    if pd.isna(val) or val is None:
+                    if val is None or pd.isna(val):
                         return "N/A"
-                    return f"Rp{val:,.0f}"
+                    try:
+                        v = float(val)
+                        return f"Rp{v:,.0f}"
+                    except (ValueError, TypeError):
+                        return "N/A"
                 
                 net_margin = "N/A"
-                if not pd.isna(rev) and not pd.isna(ni) and rev > 0:
-                    net_margin = f"{(ni/rev)*100:.1f}%"
+                if rev is not None and ni is not None and not pd.isna(rev) and not pd.isna(ni):
+                    try:
+                        r_val = float(rev)
+                        n_val = float(ni)
+                        if r_val > 0:
+                            net_margin = f"{(n_val / r_val) * 100:.1f}%"
+                    except (ValueError, TypeError, ZeroDivisionError):
+                        pass
                     
                 div_val = yearly_divs.get(year, 0)
                 dps_str = f"Rp{div_val:,.0f}" if div_val > 0 else "-"
@@ -317,22 +376,15 @@ class DataFetcher:
     def fetch_comprehensive_financials(self, ticker: str, current_price: float) -> Dict[str, Any]:
         """
         Fetch financials + raw numeric metrics for valuation engine + growth analysis.
-        Returns:
-            {
-                "financials": [...],           # Formatted 3-year financial table
-                "raw_metrics": {               # Raw floats for valuation models
-                    "eps", "bvps", "fcf_per_share", "pe_ratio", "pb_ratio",
-                    "shares_outstanding"
-                },
-                "growth_analysis": {           # 3-year CAGR + growth status
-                    "revenue_cagr_3y_pct", "net_income_cagr_3y_pct",
-                    "growth_status", "growth_summary", "is_expanding"
-                }
-            }
         """
+        cache_key = f"fin_{ticker.upper()}"
+        cached = self._get_from_cache(cache_key)
+        if cached is not None:
+            return cached
+
         financials = self.fetch_yearly_financials(ticker)
 
-        raw_metrics = {
+        raw_metrics: Dict[str, Any] = {
             "eps": None,
             "bvps": None,
             "fcf_per_share": None,
@@ -341,7 +393,7 @@ class DataFetcher:
             "shares_outstanding": None,
         }
 
-        growth_analysis = {
+        growth_analysis: Dict[str, Any] = {
             "revenue_cagr_3y_pct": None,
             "net_income_cagr_3y_pct": None,
             "growth_status": "Data Tidak Tersedia",
@@ -513,9 +565,11 @@ class DataFetcher:
                 "cash_flow_quality_ratio": None, "health_status": "Data Terbatas", "health_summary": ""
             }
 
-        return {
+        res = {
             "financials": financials,
             "raw_metrics": raw_metrics,
             "growth_analysis": growth_analysis,
             "financial_health": financial_health,
         }
+        self._set_cache(cache_key, res)
+        return res

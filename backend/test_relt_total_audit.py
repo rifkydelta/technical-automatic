@@ -58,7 +58,7 @@ class TestReltTotalAudit(unittest.TestCase):
         self.assertIn(res["action"], ["ULTRA BUY", "STRONG BUY", "PULLBACK BUY", "WATCH BUY", "RISK WARNING", "WAIT", "WAIT / NO TRADE"])
 
     def test_adaptive_stop_loss_hard_floor(self):
-        """Verify Stop Loss is strictly capped (max -6% risk floor, min -2% buffer)."""
+        """Verify Stop Loss is strictly capped (max -8% risk floor, min -3% buffer)."""
         res = self.relt_engine.analyze(self.uptrend_df, reference_price=self.uptrend_df['Close'].iloc[-1])
         setup = res["trade_setup"]
         entry = setup["entry_price"]
@@ -66,8 +66,8 @@ class TestReltTotalAudit(unittest.TestCase):
         risk_pct = setup["risk_percent"]
 
         self.assertLess(sl, entry, "Stop loss must be below entry price")
-        self.assertLessEqual(risk_pct, 6.01, "Stop loss risk percent must not exceed 6%")
-        self.assertGreaterEqual(risk_pct, 1.99, "Stop loss risk percent must be at least 2%")
+        self.assertLessEqual(risk_pct, 8.01, "Stop loss risk percent must not exceed 8%")
+        self.assertGreaterEqual(risk_pct, 2.99, "Stop loss risk percent must be at least 3%")
 
     def test_idx_lot_sizing_calculation(self):
         """Verify IDX Lot sizing uses 1 Lot = 100 Shares integer arithmetic."""
@@ -86,14 +86,14 @@ class TestReltTotalAudit(unittest.TestCase):
         self.assertLessEqual(setup["max_risk_amount"], 10000000 * 0.01 + 5000, "Max risk must respect risk budget")
 
     def test_historical_backtester_no_deep_losses(self):
-        """Verify backtest trades have no excessive loss > -6.5% and have timestamps."""
+        """Verify backtest trades have no excessive loss > -8.5% and have timestamps."""
         summary = self.backtester.run_relt_daily_backtest(self.uptrend_df, lookback_days=365)
         self.assertIsNotNone(summary)
         self.assertGreaterEqual(summary.total_trades, 1)
 
         for trade in summary.trade_logs:
             if trade.status == "hit_sl":
-                self.assertGreaterEqual(trade.pnl_pct, -6.5, f"Trade loss {trade.pnl_pct}% exceeded hard floor!")
+                self.assertGreaterEqual(trade.pnl_pct, -8.5, f"Trade loss {trade.pnl_pct}% exceeded hard floor!")
             self.assertIsNotNone(trade.entry_time, "Trade must have entry_time")
             self.assertIsNotNone(trade.exit_time, "Trade must have exit_time")
 

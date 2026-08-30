@@ -28,15 +28,16 @@ class HourlyEntryEngine:
         when the trade entry condition occurred on the 1-Hour chart for target_date_str.
         Fallback to '16:00:00' (market close) if 1H bar is not available for historical date.
         """
+        clean_date = str(target_date_str).strip().split(' ')[0]
         if h1_df is None or h1_df.empty:
-            return f"{target_date_str} 16:00:00"
+            return f"{clean_date} 16:00:00"
 
         try:
             dates_series = h1_df.index.strftime("%Y-%m-%d")
-            day_h1 = h1_df[dates_series == target_date_str]
+            day_h1 = h1_df[dates_series == clean_date]
 
             if day_h1.empty:
-                return f"{target_date_str} 16:00:00"
+                return f"{clean_date} 16:00:00"
 
             # Check each 1H bar on that day to find the entry bar
             for idx, row in day_h1.iterrows():

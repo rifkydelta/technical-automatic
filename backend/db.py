@@ -9,9 +9,12 @@ DB_DIR = os.path.join(os.path.dirname(__file__), "data")
 DB_PATH = os.path.join(DB_DIR, "signals.db")
 
 def _init_db_sync():
-    """Synchronously create the SQLite table and indexes using built-in sqlite3."""
+    """Synchronously create the SQLite table and indexes using built-in sqlite3 with WAL mode."""
     os.makedirs(DB_DIR, exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+        conn.execute("PRAGMA cache_size=10000;")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS signals (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

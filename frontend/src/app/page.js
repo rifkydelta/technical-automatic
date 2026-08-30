@@ -5,9 +5,9 @@ import Link from 'next/link';
 import InputForm from '@/components/InputForm';
 import IHSGCard from '@/components/IHSGCard';
 import CategoryPresetHub from '@/components/CategoryPresetHub';
-import { Radio, Layers, BookOpen, ArrowRight, Zap, TrendingUp, Sparkles } from 'lucide-react';
+import { Radio, Layers, BookOpen, ArrowRight, Zap, TrendingUp, Sparkles, ShieldCheck, Activity } from 'lucide-react';
 
-const POPULAR_TICKERS = ['BBCA', 'BBRI', 'BMRI', 'VKTR', 'AUTO', 'DSSA', 'BRIS', 'ADRO'];
+const POPULAR_TICKERS = ['BBCA', 'BBRI', 'BMRI', 'VKTR', 'AUTO', 'DSSA', 'BRIS', 'ADRO', 'PTBA', 'TLKM'];
 
 export default function Home() {
   const router = useRouter();
@@ -23,10 +23,10 @@ export default function Home() {
     if (inputTickers.length === 0) return;
 
     if (inputTickers.length > 1) {
-      // Screener multi-ticker
+      // Multi-ticker Screener
       router.push(`/screener?tickers=${inputTickers.join(',')}&mode=${formData.mode || mode}`);
     } else {
-      // Single ticker analysis
+      // Single Ticker Analysis
       router.push(`/analysis/${inputTickers[0]}?mode=${formData.mode || mode}`);
     }
   };
@@ -42,14 +42,17 @@ export default function Home() {
           padding: '36px',
           borderRadius: '24px',
           position: 'relative',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%)',
+          border: '1px solid rgba(255, 255, 255, 0.09)'
         }}
       >
+        {/* Left Column: Brand, Headline, Value Prop & Quick Pills */}
         <div className="flex-col" style={{ alignItems: 'flex-start', position: 'relative', zIndex: 1, paddingRight: '20px' }}>
-          <div className="flex-row items-center gap-sm" style={{ marginBottom: '10px' }}>
-            <div className="live-dot"></div>
-            <span className="text-xs tracking-widest font-mono uppercase" style={{ color: 'var(--bullish)', letterSpacing: '0.2em' }}>
-              Live Market Intelligence
+          <div className="flex-row items-center gap-sm" style={{ marginBottom: '12px' }}>
+            <div className="live-dot" />
+            <span className="text-xs tracking-widest font-mono uppercase" style={{ color: 'var(--bullish)', letterSpacing: '0.18em', fontWeight: '700' }}>
+              Live Market Intelligence • IDX Terminal
             </span>
           </div>
 
@@ -59,44 +62,53 @@ export default function Home() {
               color: 'var(--text-primary)',
               lineHeight: '1.15',
               letterSpacing: '-0.025em',
-              textShadow: '0 0 40px rgba(255,255,255,0.1)',
+              textShadow: '0 0 40px rgba(255, 255, 255, 0.12)',
               marginBottom: '12px'
             }}
           >
             Algorithmic<br />Technical Analysis
           </h1>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginTop: '2px', marginBottom: '20px' }}>
-            <p
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              marginTop: '4px',
+              marginBottom: '22px',
+              flexWrap: 'nowrap',
+              whiteSpace: 'nowrap',
+              maxWidth: '100%'
+            }}
+          >
+            <span
               className="text-sm text-secondary"
               style={{
-                lineHeight: '1.6',
-                maxWidth: '100%',
                 fontWeight: '300',
-                margin: 0
+                whiteSpace: 'nowrap'
               }}
             >
               One Click. Complete Market Insights, Smart Money Signals & Pattern Detection.
-            </p>
-            <div
+            </span>
+            <span
               className="text-muted tracking-widest uppercase"
               style={{
                 borderLeft: '1px solid rgba(255, 255, 255, 0.2)',
-                paddingLeft: '8px',
-                fontSize: 'clamp(9px, 2.5vw, 12px)',
-                display: 'flex',
+                paddingLeft: '10px',
+                fontSize: '11px',
+                display: 'inline-flex',
                 alignItems: 'center',
-                height: '14px',
-                lineHeight: '1'
+                whiteSpace: 'nowrap',
+                flexShrink: 0
               }}
             >
               powered by <span style={{ color: 'var(--bullish)', fontWeight: 'bold', textTransform: 'lowercase', marginLeft: '4px' }}>@rifkydelta</span>
-            </div>
+            </span>
           </div>
 
           {/* Quick Popular Ticker Chips */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: '600' }}>
               Sering Dianalisis:
             </span>
             {POPULAR_TICKERS.map((t) => (
@@ -104,16 +116,26 @@ export default function Home() {
                 key={t}
                 onClick={() => router.push(`/analysis/${t}?mode=${mode}`)}
                 style={{
-                  padding: '3px 8px',
+                  padding: '4px 10px',
                   borderRadius: '6px',
                   fontSize: '11px',
-                  fontFamily: 'monospace',
+                  fontFamily: 'var(--font-mono)',
                   fontWeight: '700',
-                  background: 'rgba(255, 255, 255, 0.05)',
+                  background: 'rgba(255, 255, 255, 0.04)',
                   border: '1px solid rgba(255, 255, 255, 0.1)',
                   color: 'var(--text-primary)',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(74, 222, 128, 0.12)';
+                  e.currentTarget.style.borderColor = 'var(--bullish)';
+                  e.currentTarget.style.color = 'var(--bullish)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
+                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
                 }}
               >
                 {t}
@@ -122,20 +144,17 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="flex-col" style={{ alignItems: 'flex-end', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
+        {/* Right Column: Integrated IHSG Widget & Pro Command Search Bar */}
+        <div className="flex-col" style={{ alignItems: 'stretch', justifyContent: 'center', position: 'relative', zIndex: 1, width: '100%', maxWidth: '440px', marginLeft: 'auto' }}>
           <IHSGCard />
-          <div style={{ width: '100%', maxWidth: '440px' }}>
-            <InputForm
-              onSubmit={handleAnalysisSubmit}
-              isLoading={isLoading}
-              mode={mode}
-              onModeChange={setMode}
-            />
-          </div>
+          <InputForm
+            onSubmit={handleAnalysisSubmit}
+            isLoading={isLoading}
+          />
         </div>
       </div>
 
-      {/* Quick Navigation Cards */}
+      {/* 3 Pro Action Feature Cards (Bento Style) */}
       <div
         style={{
           display: 'grid',
@@ -149,12 +168,12 @@ export default function Home() {
           href="/signals"
           className="card"
           style={{
-            padding: '20px 24px',
-            borderRadius: '16px',
+            padding: '22px 26px',
+            borderRadius: '20px',
             textDecoration: 'none',
             color: 'inherit',
             background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%)',
-            border: '1px solid rgba(59, 130, 246, 0.2)',
+            border: '1px solid rgba(59, 130, 246, 0.22)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -162,12 +181,12 @@ export default function Home() {
           }}
         >
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <div
                 style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '10px',
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '12px',
                   backgroundColor: 'rgba(59, 130, 246, 0.15)',
                   display: 'flex',
                   alignItems: 'center',
@@ -175,32 +194,33 @@ export default function Home() {
                   color: '#60a5fa'
                 }}
               >
-                <Radio size={18} />
+                <Radio size={19} />
               </div>
               <span
                 style={{
                   fontSize: '10px',
                   fontWeight: '800',
-                  padding: '2px 8px',
+                  padding: '3px 9px',
                   borderRadius: '6px',
-                  backgroundColor: 'rgba(74, 222, 128, 0.15)',
-                  color: 'var(--bullish)',
-                  border: '1px solid rgba(74, 222, 128, 0.3)'
+                  backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                  color: '#60a5fa',
+                  border: '1px solid rgba(59, 130, 246, 0.35)',
+                  letterSpacing: '0.04em'
                 }}
               >
                 REALTIME 1H
               </span>
             </div>
-            <div style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)', marginBottom: '4px' }}>
+            <div style={{ fontWeight: '800', fontSize: '16px', color: 'var(--text-primary)', marginBottom: '6px' }}>
               Live Signal Scanner
             </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-              Pantau sinyal beli & rekam jejak trade seluruh emiten IDX dengan timing eksekusi bursa presisi.
+            <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: '1.55', margin: 0 }}>
+              Pantau sinyal beli realtime terkonfirmasi 1H bursa dengan rekam jejak trade & win rate backtest transparan.
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '16px', fontSize: '12px', fontWeight: '700', color: '#60a5fa' }}>
-            Buka Signal Dashboard <ArrowRight size={13} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '20px', fontSize: '12px', fontWeight: '800', color: '#60a5fa' }}>
+            Buka Signal Dashboard <ArrowRight size={13} strokeWidth={2.5} />
           </div>
         </Link>
 
@@ -209,12 +229,12 @@ export default function Home() {
           href="/screener"
           className="card"
           style={{
-            padding: '20px 24px',
-            borderRadius: '16px',
+            padding: '22px 26px',
+            borderRadius: '20px',
             textDecoration: 'none',
             color: 'inherit',
             background: 'linear-gradient(135deg, rgba(74, 222, 128, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%)',
-            border: '1px solid rgba(74, 222, 128, 0.2)',
+            border: '1px solid rgba(74, 222, 128, 0.22)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -222,12 +242,12 @@ export default function Home() {
           }}
         >
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <div
                 style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '10px',
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '12px',
                   backgroundColor: 'rgba(74, 222, 128, 0.15)',
                   display: 'flex',
                   alignItems: 'center',
@@ -235,32 +255,33 @@ export default function Home() {
                   color: 'var(--bullish)'
                 }}
               >
-                <Layers size={18} />
+                <Layers size={19} />
               </div>
               <span
                 style={{
                   fontSize: '10px',
                   fontWeight: '800',
-                  padding: '2px 8px',
+                  padding: '3px 9px',
                   borderRadius: '6px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                  color: 'var(--text-secondary)',
-                  border: '1px solid rgba(255, 255, 255, 0.12)'
+                  backgroundColor: 'rgba(74, 222, 128, 0.15)',
+                  color: 'var(--bullish)',
+                  border: '1px solid rgba(74, 222, 128, 0.35)',
+                  letterSpacing: '0.04em'
                 }}
               >
-                PRESET & CUSTOM
+                8 PRESETS & CUSTOM
               </span>
             </div>
-            <div style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)', marginBottom: '4px' }}>
+            <div style={{ fontWeight: '800', fontSize: '16px', color: 'var(--text-primary)', marginBottom: '6px' }}>
               Screener & Presets Hub
             </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-              Formula preset Bluechip, Dividen, Rebound MA20, dan Full Scan seluruh saham IHSG.
+            <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: '1.55', margin: 0 }}>
+              Saring saham Bluechip LQ45, High Dividend, Rebound MA20, dan Breakout 52-Minggu dalam hitungan detik.
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '16px', fontSize: '12px', fontWeight: '700', color: 'var(--bullish)' }}>
-            Eksplorasi Screener <ArrowRight size={13} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '20px', fontSize: '12px', fontWeight: '800', color: 'var(--bullish)' }}>
+            Eksplorasi Screener <ArrowRight size={13} strokeWidth={2.5} />
           </div>
         </Link>
 
@@ -269,12 +290,12 @@ export default function Home() {
           href="/learning"
           className="card"
           style={{
-            padding: '20px 24px',
-            borderRadius: '16px',
+            padding: '22px 26px',
+            borderRadius: '20px',
             textDecoration: 'none',
             color: 'inherit',
             background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%)',
-            border: '1px solid rgba(251, 191, 36, 0.2)',
+            border: '1px solid rgba(251, 191, 36, 0.22)',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
@@ -282,12 +303,12 @@ export default function Home() {
           }}
         >
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
               <div
                 style={{
-                  width: '36px',
-                  height: '36px',
-                  borderRadius: '10px',
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '12px',
                   backgroundColor: 'rgba(251, 191, 36, 0.15)',
                   display: 'flex',
                   alignItems: 'center',
@@ -295,32 +316,33 @@ export default function Home() {
                   color: 'var(--warning)'
                 }}
               >
-                <BookOpen size={18} />
+                <BookOpen size={19} />
               </div>
               <span
                 style={{
                   fontSize: '10px',
                   fontWeight: '800',
-                  padding: '2px 8px',
+                  padding: '3px 9px',
                   borderRadius: '6px',
                   backgroundColor: 'rgba(251, 191, 36, 0.15)',
                   color: 'var(--warning)',
-                  border: '1px solid rgba(251, 191, 36, 0.3)'
+                  border: '1px solid rgba(251, 191, 36, 0.35)',
+                  letterSpacing: '0.04em'
                 }}
               >
-                8 CHAPTERS
+                8 BAB PANDUAN
               </span>
             </div>
-            <div style={{ fontWeight: '700', fontSize: '15px', color: 'var(--text-primary)', marginBottom: '4px' }}>
+            <div style={{ fontWeight: '800', fontSize: '16px', color: 'var(--text-primary)', marginBottom: '6px' }}>
               Learning Center & Guide
             </div>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0 }}>
-              Kuasai indikator teknikal, SMC Order Block, Moving Averages, dan manajemen risiko adaptif.
+            <p style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: '1.55', margin: 0 }}>
+              Kuasai Smart Money Concepts (SMC), Order Block, FVG, Supertrend, dan aturan manajemen risiko adaptif.
             </p>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '16px', fontSize: '12px', fontWeight: '700', color: 'var(--warning)' }}>
-            Mulai Belajar <ArrowRight size={13} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '20px', fontSize: '12px', fontWeight: '800', color: 'var(--warning)' }}>
+            Mulai Belajar <ArrowRight size={13} strokeWidth={2.5} />
           </div>
         </Link>
       </div>

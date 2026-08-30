@@ -303,15 +303,21 @@ function AnalysisContent({ params }) {
           {/* Header with Price, Change, and Actions */}
           <Header data={data} mode={mode} onModeChange={handleModeChange} />
 
-          {/* Modern Segmented Sub-Tabs Nav */}
+          {/* Modern Segmented Sub-Tabs Nav (Sticky Glassmorphic) */}
           <div
             style={{
+              position: 'sticky',
+              top: '12px',
+              zIndex: 50,
               display: 'flex',
               gap: '6px',
-              backgroundColor: 'rgba(0, 0, 0, 0.3)',
+              backgroundColor: 'rgba(15, 23, 42, 0.88)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
               padding: '6px',
-              borderRadius: '12px',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '14px',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
               overflowX: 'auto'
             }}
           >

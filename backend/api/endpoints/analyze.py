@@ -71,13 +71,15 @@ async def analyze_ticker(request: AnalyzeRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
         
-    daily_df = data["daily"]
-    h1_df = data["h1"]
-    m15_df = data["m15"]
-    
     financials_data = comp_financials.get("financials", [])
     growth_info = comp_financials.get("growth_analysis", {})
     raw_metrics = comp_financials.get("raw_metrics", {})
+    daily_df = data.get("daily")
+    h1_df = data.get("h1")
+    m15_df = data.get("m15")
+    
+    if daily_df is None or daily_df.empty or len(daily_df) < 5:
+        raise HTTPException(status_code=404, detail=f"Data OHLCV historis tidak ditemukan untuk emiten {ticker}.")
     
     if h1_df is None or m15_df is None:
         warnings.append("Intraday data (1H/15M) not fully available. Using Daily fallback.")
@@ -429,12 +431,14 @@ async def analyze_screener(request: ScreenerRequest):
         try:
             info = fetcher.fetch_ticker_info(ticker)
             daily_df = fetcher.fetch_daily_only(ticker)
+            if daily_df is None or daily_df.empty or len(daily_df) < 5:
+                return None
             
             # Apply Session Filtering for Screener
-            live_price_raw = info.get("last_price")
-            live_price = float(live_price_raw) if live_price_raw is not None else 0.0
+            live_price_raw = info.get("last_price") if info else None
+            live_price = float(live_price_raw) if live_price_raw is not None else float(daily_df['Close'].iloc[-1])
             ref = session_svc.get_reference_data(mode, ticker, live_price, daily_df)
-            reference_price = float(ref["price"])
+            reference_price = float(ref["price"]) if ref and ref.get("price") is not None else float(daily_df['Close'].iloc[-1])
             
             ind = ind_engine.calculate_all(daily_df)
             ema20 = float(ind.get('ema20') or 0.0)

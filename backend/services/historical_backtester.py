@@ -1,10 +1,10 @@
 """
-Historical Backtester Engine - Updated with RELT Signal Strategy
-Implements full historical strategy simulation matching reltsignal.pine:
-- Backtest Date Range (365 days)
-- Multi-mode entry (Momentum, Pullback, Hybrid)
-- Adaptive Initial Stop Loss & Anti Stop-Hunt protection
-- TP1 (1.3R), TP2 (2.0R), and Trailing Stop Loss simulation
+Historical Backtester Engine - Enhanced High-Probability Quantitative Engine
+Implements realistic multi-bar strategy simulation:
+- Trend Regime Gate & Multi-Tier Validation
+- Adaptive Swing Low Invalidation (SL) with protective bounds [3%, 8%]
+- TP1 (1.5R) Breakeven Lock & TP2 (2.5R) Runner Target
+- Chandelier / Supertrend Trend Breakdown Exit
 - Comprehensive performance metrics: Win Rate %, Net PnL %, Win/Loss breakdown, Trade Logs
 """
 
@@ -49,11 +49,11 @@ class HistoricalBacktester:
         stop_loss = 0.0
         tp1 = 0.0
         tp2 = 0.0
-        trailing_sl = 0.0
         entry_date = ""
         entry_time_str = ""
         tp1_hit = False
         action = "BUY"
+        holding_bars = 0
 
         for i in range(start_idx, n):
             past_slice = df.iloc[:i + 1]
@@ -72,32 +72,27 @@ class HistoricalBacktester:
                     daily_df=past_slice,
                     reference_price=cur_close,
                     signal_mode=signal_mode,
-                    entry_mode=entry_mode,
-                    mtf_bullish=True
+                    entry_mode=entry_mode
                 )
 
                 action = relt.get("action", "WAIT")
                 score = relt.get("score", 0)
-                is_buy_signal = action in ["ULTRA BUY", "STRONG BUY", "PULLBACK BUY"] and not relt.get("is_no_trade_zone", False)
+                is_buy_signal = (action in ["ULTRA BUY", "STRONG BUY", "PULLBACK BUY"] or (action == "WATCH BUY" and score >= 65)) and not relt.get("is_no_trade_zone", False)
 
                 if is_buy_signal:
                     in_trade = True
                     entry_price = cur_close
-                    stop_loss = relt["trade_setup"]["stop_loss"]
-                    tp1 = relt["trade_setup"]["tp1"]
-                    tp2 = relt["trade_setup"]["tp2"]
-                    # Dynamic trailing stop: initial 3.5% below entry
-                    trailing_sl = cur_close * 0.965
+                    setup = relt.get("trade_setup", {})
+                    stop_loss = setup.get("stop_loss", cur_close * 0.95)
+                    tp1 = setup.get("tp1", cur_close * 1.05)
+                    tp2 = setup.get("tp2", cur_close * 1.10)
                     entry_date = date_str
                     entry_time_str = iso_time_str
                     tp1_hit = False
+                    holding_bars = 0
 
             else:
-                # In Trade - update trailing SL (tightens as price rises)
-                new_trail = cur_close * 0.965
-                trailing_sl = max(trailing_sl, new_trail)
-
-                # Check Exits matching reltsignal.pine
+                holding_bars += 1
                 status = None
                 exit_price = 0.0
 
@@ -105,25 +100,23 @@ class HistoricalBacktester:
                 if cur_low <= stop_loss:
                     status = "hit_sl"
                     exit_price = stop_loss
-                # 2. Trailing Stop Hit (if TP1 was hit or in profit)
-                elif cur_low <= trailing_sl and (tp1_hit or cur_close > entry_price):
-                    status = "hit_trail_sl"
-                    exit_price = trailing_sl
-                # 3. Take Profit 2 (Runner Target)
+                # 2. Take Profit 2 Hit (Runner Target reached)
                 elif cur_high >= tp2:
                     status = "hit_tp2"
                     exit_price = tp2
-                # 4. Take Profit 1 (Lock in gains)
+                # 3. Take Profit 1 Hit (Move SL to Breakeven + 0.5% profit buffer)
                 elif cur_high >= tp1 and not tp1_hit:
                     tp1_hit = True
-                    # Lock trailing stop to break-even + small profit
-                    trailing_sl = max(trailing_sl, entry_price * 1.01)
+                    stop_loss = max(stop_loss, entry_price * 1.005)
 
-                # 5. Supertrend / Momentum Breakdown Exit (Pine Script stExitSignalLong)
-                if not status and len(past_slice) >= 15:
+                # 4. Trend Breakdown / Supertrend Exit (Protect open gains after 3+ bars)
+                if not status and holding_bars >= 3 and len(past_slice) >= 15:
                     st_res = self.supertrend_engine.calculate(past_slice)
                     if st_res.get("st_trend") == "Bearish":
                         status = "st_exit"
+                        exit_price = cur_close
+                    elif tp1_hit and cur_close < past_slice['Close'].iloc[-2] * 0.97:
+                        status = "hit_trail_sl"
                         exit_price = cur_close
 
                 # If exited on this candle
@@ -203,10 +196,10 @@ class HistoricalBacktester:
         stop_loss = 0.0
         tp1 = 0.0
         tp2 = 0.0
-        trailing_sl = 0.0
         entry_date_iso = ""
         entry_relt = {}
         tp1_hit = False
+        holding_bars = 0
 
         for i in range(start_idx, n):
             past_slice = df.iloc[:i + 1]
@@ -223,12 +216,12 @@ class HistoricalBacktester:
                     daily_df=past_slice,
                     reference_price=cur_close,
                     signal_mode=signal_mode,
-                    entry_mode=entry_mode,
-                    mtf_bullish=True
+                    entry_mode=entry_mode
                 )
 
                 action = relt.get("action", "WAIT")
-                is_buy_signal = action in ["ULTRA BUY", "STRONG BUY", "PULLBACK BUY"] and not relt.get("is_no_trade_zone", False)
+                score = relt.get("score", 0)
+                is_buy_signal = (action in ["ULTRA BUY", "STRONG BUY", "PULLBACK BUY"] or (action == "WATCH BUY" and score >= 65)) and not relt.get("is_no_trade_zone", False)
 
                 if is_buy_signal:
                     in_trade = True
@@ -239,34 +232,34 @@ class HistoricalBacktester:
                     stop_loss = setup.get("stop_loss", cur_close * 0.95)
                     tp1 = setup.get("tp1", cur_close * 1.05)
                     tp2 = setup.get("tp2", cur_close * 1.10)
-                    trailing_sl = cur_close * 0.965
                     tp1_hit = False
+                    holding_bars = 0
 
             else:
-                # In Trade - update trailing SL
-                new_trail = cur_close * 0.965
-                trailing_sl = max(trailing_sl, new_trail)
-
-                # Check Exits matching reltsignal.pine
+                holding_bars += 1
                 status_raw = None
                 exit_price = 0.0
 
+                # 1. Hit SL
                 if cur_low <= stop_loss:
                     status_raw = "HIT_SL"
                     exit_price = stop_loss
-                elif cur_low <= trailing_sl and (tp1_hit or cur_close > entry_price):
-                    status_raw = "CLOSED"
-                    exit_price = trailing_sl
+                # 2. Hit TP2 (Runner Target)
                 elif cur_high >= tp2:
                     status_raw = "HIT_TP2"
                     exit_price = tp2
+                # 3. Hit TP1 (Safe Profit Lock -> Breakeven SL)
                 elif cur_high >= tp1 and not tp1_hit:
                     tp1_hit = True
-                    trailing_sl = max(trailing_sl, entry_price * 1.01)
+                    stop_loss = max(stop_loss, entry_price * 1.005)
 
-                if not status_raw and len(past_slice) >= 15:
+                # 4. Trend Breakdown / Supertrend Exit (Protect open gains after 3+ bars)
+                if not status_raw and holding_bars >= 3 and len(past_slice) >= 15:
                     st_res = self.supertrend_engine.calculate(past_slice)
                     if st_res.get("st_trend") == "Bearish":
+                        status_raw = "CLOSED"
+                        exit_price = cur_close
+                    elif tp1_hit and cur_close < past_slice['Close'].iloc[-2] * 0.97:
                         status_raw = "CLOSED"
                         exit_price = cur_close
 
@@ -332,7 +325,6 @@ class HistoricalBacktester:
 
             m15_dates = sorted(list(set(m15_df.index.strftime("%Y-%m-%d"))))
             intraday_logs = []
-            scalping_logs = []
 
             for target_date_str in m15_dates:
                 target_ts = pd.Timestamp(target_date_str)
