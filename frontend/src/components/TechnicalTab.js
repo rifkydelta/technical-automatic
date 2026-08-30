@@ -4,7 +4,6 @@ import MomentumView from './technical/MomentumView';
 import VolatilityView from './technical/VolatilityView';
 import LevelView from './technical/LevelView';
 import StrategyView from './technical/StrategyView';
-import HistoricalBacktestView from './technical/HistoricalBacktestView';
 import { Activity } from 'lucide-react';
 
 export default function TechnicalTab({ data }) {
@@ -27,7 +26,6 @@ export default function TechnicalTab({ data }) {
       case 'volatility': return <VolatilityView volData={technical_detail.volatility} lastPrice={data.last_price} />;
       case 'levels': return <LevelView levelsData={technical_detail.levels} />;
       case 'strategy': return <StrategyView strategiesData={technical_detail.strategies} />;
-      case 'backtest': return <HistoricalBacktestView historicalData={technical_detail.historical_backtest} />;
       default: return null;
     }
   };
@@ -37,12 +35,12 @@ export default function TechnicalTab({ data }) {
   };
 
   return (
-    <div className="card flex-col" style={{ padding: '32px', gap: '24px' }}>
+    <div className="card flex-col" style={{ padding: '32px', gap: '24px', borderRadius: '20px' }}>
       
       {/* Header */}
       <div className="flex-col gap-xs">
         <div className="text-xs font-semibold tracking-widest uppercase text-muted">
-          ANALISIS TEKNIKAL • {data.ticker} • HARIAN
+          ANALISIS TEKNIKAL KOMPREHENSIF • {data.ticker} • HARIAN
         </div>
         <div className="text-xs text-secondary opacity-80">
           Last Update: {data.date}
@@ -50,7 +48,7 @@ export default function TechnicalTab({ data }) {
       </div>
 
       {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
         <div className="card flex-col gap-xs" style={{ padding: '16px', backgroundColor: 'rgba(255,255,255,0.02)' }}>
           <span className="text-xs font-semibold tracking-widest uppercase text-muted">Tren Utama (EMA 200)</span>
           <span className="text-xl font-bold" style={{ color: technical_detail.trend.main_trend === 'Bullish' ? 'var(--bullish)' : 'var(--bearish)' }}>
@@ -69,40 +67,39 @@ export default function TechnicalTab({ data }) {
       <div className="quick-metrics">
         <div className="metric-chip">
           <span className="text-muted">EMA 20:</span>
-          <span className="font-mono text-primary">{Math.round(data.indicators.ema20 || 0).toLocaleString()}</span>
+          <span className="font-mono text-primary">{Math.round(data.indicators?.ema20 || 0).toLocaleString()}</span>
         </div>
         <div className="metric-chip">
           <span className="text-muted">EMA 50:</span>
-          <span className="font-mono text-primary">{Math.round(data.indicators.ema50 || 0).toLocaleString()}</span>
+          <span className="font-mono text-primary">{Math.round(data.indicators?.ema50 || 0).toLocaleString()}</span>
         </div>
         <div className="metric-chip">
           <span className="text-muted">EMA 200:</span>
-          <span className="font-mono text-primary">{Math.round(data.indicators.ema200 || 0).toLocaleString()}</span>
+          <span className="font-mono text-primary">{Math.round(data.indicators?.ema200 || 0).toLocaleString()}</span>
         </div>
         <div className="metric-chip">
           <span className="text-muted">ADX:</span>
-          <span className="font-mono text-primary">{(data.indicators.adx || 0).toFixed(1)}</span>
+          <span className="font-mono text-primary">{(data.indicators?.adx || 0).toFixed(1)}</span>
         </div>
         <div className="metric-chip">
           <span className="text-muted">RSI:</span>
-          <span className="font-mono text-primary">{(data.indicators.rsi || 0).toFixed(1)}</span>
+          <span className="font-mono text-primary">{(data.indicators?.rsi || 0).toFixed(1)}</span>
         </div>
         <div className="metric-chip">
           <span className="text-muted">ATR:</span>
-          <span className="font-mono text-primary">{(data.indicators.atr || 0).toFixed(1)}</span>
+          <span className="font-mono text-primary">{(data.indicators?.atr || 0).toFixed(1)}</span>
         </div>
       </div>
 
       <hr style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.05)' }} />
 
       {/* Sub Navigation */}
-      <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }} className="quick-metrics">
+      <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
         <button className={getSubTabClass('trend')} onClick={() => setActiveSubTab('trend')}>Tren</button>
         <button className={getSubTabClass('momentum')} onClick={() => setActiveSubTab('momentum')}>Momentum</button>
         <button className={getSubTabClass('volatility')} onClick={() => setActiveSubTab('volatility')}>Volatilitas</button>
         <button className={getSubTabClass('levels')} onClick={() => setActiveSubTab('levels')}>Level Harga</button>
         <button className={getSubTabClass('strategy')} onClick={() => setActiveSubTab('strategy')}>Strategi</button>
-        <button className={getSubTabClass('backtest')} onClick={() => setActiveSubTab('backtest')}>Backtest</button>
       </div>
 
       {/* Main Content Area */}

@@ -229,8 +229,25 @@ class AnalysisEngine:
             
         return EntryAnalysis(entry_zone="Current Price", entry_type="Pullback", reason="Middle of range")
 
-    def step7_risk_management(self, entry: float, sr: SupportResistanceResult) -> RiskManagement:
+    def step7_risk_management(self, entry: float, sr: SupportResistanceResult, relt_setup: Optional[Dict[str, Any]] = None) -> RiskManagement:
         planned_entry = entry
+        
+        if relt_setup and relt_setup.get("tp1") and relt_setup.get("stop_loss"):
+            sl = float(relt_setup["stop_loss"])
+            tp1 = float(relt_setup["tp1"])
+            tp2 = float(relt_setup.get("tp2") or round(entry + (entry - sl) * 2.0, 2))
+            tp3 = round(tp2 * 1.05, 2)
+            rr = float(relt_setup.get("risk_reward_ratio") or (round((tp1 - planned_entry) / max(planned_entry - sl, 1.0), 2)))
+            entry_zone = f"{entry*0.99:.0f} - {entry*1.01:.0f}"
+            return RiskManagement(
+                entry_zone=entry_zone,
+                stop_loss=sl,
+                target_1=tp1,
+                target_2=tp2,
+                target_3=tp3,
+                risk_reward_ratio=round(rr, 2),
+                is_rejected=rr < 1.3
+            )
         
         # Default (No Support found)
         sl = entry * 0.95 # Fallback SL 5%

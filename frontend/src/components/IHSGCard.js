@@ -24,9 +24,10 @@ export default function IHSGCard() {
 
   // Poll API every 1 second
   useEffect(() => {
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     async function fetchIHSG() {
       try {
-        const res = await fetch('http://localhost:8000/api/market/ihsg');
+        const res = await fetch(`${API_URL}/api/market/ihsg`);
         const json = await res.json();
         if (!json.error) {
           setData(json);

@@ -9,7 +9,7 @@ from services.scoring_engine import ScoringEngine
 from services.recommendation import RecommendationEngine
 from services.session_service import SessionService
 from services.pattern_engine import PatternEngine
-from services.idx_universe import get_all_idx_tickers
+from services.idx_universe import get_all_idx_tickers, get_ticker_company_name
 from services.custom_screeners import SCREENER_REGISTRY, get_available_custom_screeners
 from services.valuation_engine import ValuationEngine
 from services.google_finance_fetcher import GoogleFinanceFetcher
@@ -299,9 +299,20 @@ async def analyze_ticker(request: AnalyzeRequest):
     ind_obj = IndicatorSet(**ind)
     momentum = analysis_engine.step5_momentum(ind_obj)
     
+    # Calculate RELT Signal & SMC Analysis early to unify risk management & targets
+    relt_raw = relt_engine.analyze(
+        daily_df=daily_df,
+        reference_price=reference_price,
+        signal_mode="Balanced",
+        entry_mode="Hybrid",
+        mtf_bullish=(mtf.alignment == "Confirmed")
+    )
+    relt_setup_main = relt_raw.get("trade_setup", {})
+    relt_signal_obj = ReltSignalResult(**relt_raw)
+
     atr = float(ind.get('atr') or 0.0)
     entry = analysis_engine.step6_entry_analysis(reference_price, sr, atr)
-    risk = analysis_engine.step7_risk_management(reference_price, sr)
+    risk = analysis_engine.step7_risk_management(reference_price, sr, relt_setup=relt_setup_main)
     
     from models.request import OrderFlowInput
     req_order_flow = request.order_flow if request.order_flow is not None else OrderFlowInput(
@@ -366,16 +377,6 @@ async def analyze_ticker(request: AnalyzeRequest):
         float_shares=info.get("float_shares")
     )
     
-    # Calculate RELT Signal & SMC Analysis
-    relt_raw = relt_engine.analyze(
-        daily_df=daily_df,
-        reference_price=reference_price,
-        signal_mode="Balanced",
-        entry_mode="Hybrid",
-        mtf_bullish=(mtf.alignment == "Confirmed")
-    )
-    relt_signal_obj = ReltSignalResult(**relt_raw)
-
     c_name = info.get("name")
     c_sector = info.get("sector")
     
@@ -497,14 +498,30 @@ async def analyze_screener(request: ScreenerRequest):
                 entry_mode="Hybrid",
                 mtf_bullish=False
             )
+            # Calculate TP Targets and Estimated Days to Reach TP
+            relt_setup = relt_fast.get("trade_setup", {})
+            atr_val = float(ind.get('atr') or (reference_price * 0.02))
+            tp1_val = relt_setup.get("tp1") or (risk.target_1 if risk.target_1 > reference_price else round(reference_price * 1.03, 2))
+            tp2_val = relt_setup.get("tp2") or (risk.target_2 if risk.target_2 > tp1_val else round(reference_price * 1.06, 2))
+            tp1_pct = relt_setup.get("tp1_percent") if relt_setup.get("tp1_percent") is not None else (round(((tp1_val - reference_price) / reference_price * 100), 2) if reference_price > 0 else 0.0)
+            
+            est_days = relt_setup.get("estimated_tp_days") or max(1, int(round(abs(tp1_val - reference_price) / max(atr_val * 0.75, reference_price * 0.008))))
+            est_days_range = relt_setup.get("estimated_tp_range") or ("1-2 Hari" if est_days == 1 else (f"{est_days}-{est_days + 2} Hari" if est_days <= 3 else f"{est_days}-{est_days + 3} Hari"))
+            # Volume 20-Day Average Comparison
+            vol_change_pct = round(((current_volume - avg_volume) / avg_volume * 100), 1) if avg_volume > 0 else 0.0
+            vol_ratio = round((current_volume / avg_volume), 2) if avg_volume > 0 else 1.0
+            vol_trend = "UP" if current_volume >= avg_volume else "DOWN"
 
             return ScreenerResult(
                 ticker=ticker,
-                company_name=info.get("name") if info.get("name") is not None else ticker,
+                company_name=info.get("name") or get_ticker_company_name(ticker),
                 last_price=reference_price,
                 change_pct=change_pct,
                 volume=int(current_volume),
                 avg_volume=avg_volume,
+                volume_change_pct=vol_change_pct,
+                volume_trend=vol_trend,
+                volume_ratio=vol_ratio,
                 trend=trend.trend_besar,
                 recommendation=rec,
                 score=score.score,
@@ -512,7 +529,12 @@ async def analyze_screener(request: ScreenerRequest):
                 risk_status=risk_status,
                 relt_score=relt_fast.get("score"),
                 relt_rating=relt_fast.get("rating"),
-                relt_action=relt_fast.get("action")
+                relt_action=relt_fast.get("action"),
+                tp1=tp1_val,
+                tp2=tp2_val,
+                tp1_pct=tp1_pct,
+                estimated_tp_days=est_days,
+                estimated_tp_range=est_days_range
             )
 
         except Exception as e:
@@ -615,9 +637,9 @@ async def analyze_custom_screener(request: CustomScreenerExecuteRequest):
                 bandar_area="Mock", bandar_area_desc="Mock", score=0
             )
 
-            current_volume = metrics.get("volume", 0)
-            avg_volume = metrics.get("vol_ma5", 0.0)
-            is_volume_elevated = True
+            current_volume = float(metrics.get("volume") or (daily_df['Volume'].iloc[-1] if not daily_df.empty else 0.0))
+            avg_volume = float(metrics.get("vol_ma20") or metrics.get("vol_ma5") or ind.get('avg_volume') or (daily_df['Volume'].tail(20).mean() if not daily_df.empty else 0.0))
+            is_volume_elevated = current_volume > avg_volume if avg_volume > 0 else True
 
             detected_patterns = pattern_engine.detect_patterns(daily_df)
             has_chart_pattern = len(detected_patterns) > 0 and detected_patterns[0]['status'] in ['Confirmed', 'Forming']
@@ -648,18 +670,54 @@ async def analyze_custom_screener(request: CustomScreenerExecuteRequest):
                 final_score = score.score
                 final_score_display = score.score_display
 
+            # Calculate TP Targets and Estimated Days to Reach TP
+            relt_fast = relt_engine.analyze(
+                daily_df=daily_df,
+                reference_price=last_close,
+                signal_mode="Balanced",
+                entry_mode="Hybrid",
+                mtf_bullish=False
+            )
+            relt_setup = relt_fast.get("trade_setup", {})
+            atr_val = float(ind.get('atr') or (last_close * 0.02))
+            tp1_val = relt_setup.get("tp1") or (risk.target_1 if (risk and risk.target_1 > last_close) else round(last_close * 1.03, 2))
+            tp2_val = relt_setup.get("tp2") or (risk.target_2 if (risk and risk.target_2 > tp1_val) else round(last_close * 1.06, 2))
+            tp1_pct = relt_setup.get("tp1_percent") if relt_setup.get("tp1_percent") is not None else (round(((tp1_val - last_close) / last_close * 100), 2) if last_close > 0 else 0.0)
+
+            if screener_id in ("bpjs_daytrade", "opening_0858"):
+                est_days = 1
+                est_days_range = "1 Hari (Daytrade)"
+            elif screener_id == "bsjp_1530":
+                est_days = 1
+                est_days_range = "1-2 Hari (BSJP)"
+            else:
+                est_days = relt_setup.get("estimated_tp_days") or max(1, int(round(abs(tp1_val - last_close) / max(atr_val * 0.75, last_close * 0.008))))
+                est_days_range = relt_setup.get("estimated_tp_range") or ("1-2 Hari" if est_days == 1 else (f"{est_days}-{est_days + 2} Hari" if est_days <= 3 else f"{est_days}-{est_days + 3} Hari"))
+            # Volume 20-Day Average Comparison
+            vol_change_pct = round(((current_volume - avg_volume) / avg_volume * 100), 1) if avg_volume > 0 else 0.0
+            vol_ratio = round((current_volume / avg_volume), 2) if avg_volume > 0 else 1.0
+            vol_trend = "UP" if current_volume >= avg_volume else "DOWN"
+
             return ScreenerResult(
                 ticker=ticker,
-                company_name=f"PT {ticker} Tbk",
+                company_name=get_ticker_company_name(ticker),
                 last_price=last_close,
                 change_pct=change_pct,
                 volume=int(current_volume),
                 avg_volume=avg_volume,
+                volume_change_pct=vol_change_pct,
+                volume_trend=vol_trend,
+                volume_ratio=vol_ratio,
                 trend=trend.trend_besar,
                 recommendation=rec_badge,
                 score=final_score,
                 score_display=final_score_display,
-                risk_status="Good Setup"
+                risk_status="Good Setup",
+                tp1=tp1_val,
+                tp2=tp2_val,
+                tp1_pct=tp1_pct,
+                estimated_tp_days=est_days,
+                estimated_tp_range=est_days_range
             )
         except Exception:
             return None

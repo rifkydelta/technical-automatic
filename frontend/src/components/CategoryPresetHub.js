@@ -1,7 +1,11 @@
 'use client';
 import { useState, useEffect } from 'react';
 import ScreenerCard from './ScreenerCard';
-import { Building2, Flame, Zap, SlidersHorizontal, Search, RefreshCw, Sparkles, Filter, Clock, Moon, Crosshair, Layers } from 'lucide-react';
+import { 
+  Building2, Flame, Zap, SlidersHorizontal, Search, RefreshCw, Sparkles, 
+  Filter, Clock, Moon, Crosshair, Layers, Table as TableIcon, LayoutGrid, 
+  Target, Calendar, TrendingUp, TrendingDown, ArrowRight 
+} from 'lucide-react';
 
 const CATEGORIES = [
   {
@@ -112,6 +116,7 @@ export default function CategoryPresetHub({ onTickerClick, mode = 'live' }) {
   const [trendFilter, setTrendFilter] = useState('ALL'); // 'ALL', 'Bullish', 'Bearish'
   const [riskFilter, setRiskFilter] = useState('ALL'); // 'ALL', 'Good Setup', 'High Risk'
   const [customFormulaText, setCustomFormulaText] = useState('');
+  const [viewMode, setViewMode] = useState('table'); // 'table' | 'grid'
 
   // Fetch Category Stock Data
   const fetchCategoryData = async (catId, forceRefresh = false) => {
@@ -127,10 +132,11 @@ export default function CategoryPresetHub({ onTickerClick, mode = 'live' }) {
     setErrorMap(prev => ({ ...prev, [catId]: null }));
 
     try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       let res;
       if (category.isCustomScreener) {
         // Call custom-preset endpoint (e.g. BPJS full IHSG scan)
-        res = await fetch('http://localhost:8000/api/screener/custom-preset', {
+        res = await fetch(`${API_URL}/api/screener/custom-preset`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ screener_id: category.screenerId, mode })
@@ -140,7 +146,7 @@ export default function CategoryPresetHub({ onTickerClick, mode = 'live' }) {
           ? ['BBCA', 'BBRI', 'BMRI', 'BBNI', 'BUMI', 'BRMS', 'ENRG', 'BRPT', 'TPIA', 'BREN', 'CUAN', 'PTRO', 'DEWA', 'VKTR', 'BRIS']
           : category.tickers;
 
-        res = await fetch('http://localhost:8000/api/screener', {
+        res = await fetch(`${API_URL}/api/screener`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tickers: targetTickers, mode })
@@ -217,25 +223,75 @@ export default function CategoryPresetHub({ onTickerClick, mode = 'live' }) {
             </h2>
           </div>
 
-          {/* Local Search Input */}
-          <div style={{ position: 'relative', width: '240px' }}>
-            <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-            <input 
-              type="text"
-              placeholder="Filter emiten..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+          {/* Local Search Input & View Toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <div
               style={{
-                width: '100%',
-                padding: '8px 12px 8px 34px',
-                backgroundColor: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '10px',
-                color: 'var(--text-primary)',
-                fontSize: '0.85rem',
-                outline: 'none'
+                display: 'flex',
+                background: 'rgba(255, 255, 255, 0.05)',
+                padding: '3px',
+                borderRadius: '8px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                gap: '4px'
               }}
-            />
+            >
+              <button
+                onClick={() => setViewMode('table')}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  fontSize: '11px',
+                  fontWeight: viewMode === 'table' ? '700' : '400',
+                  background: viewMode === 'table' ? 'rgba(59, 130, 246, 0.25)' : 'transparent',
+                  color: viewMode === 'table' ? '#60a5fa' : 'var(--text-muted)'
+                }}
+              >
+                <TableIcon size={13} /> Tabel Screener
+              </button>
+              <button
+                onClick={() => setViewMode('grid')}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  fontSize: '11px',
+                  fontWeight: viewMode === 'grid' ? '700' : '400',
+                  background: viewMode === 'grid' ? 'rgba(59, 130, 246, 0.25)' : 'transparent',
+                  color: viewMode === 'grid' ? '#60a5fa' : 'var(--text-muted)'
+                }}
+              >
+                <LayoutGrid size={13} /> Card Grid
+              </button>
+            </div>
+
+            <div style={{ position: 'relative', width: '220px' }}>
+              <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <input 
+                type="text"
+                placeholder="Filter emiten..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px 8px 34px',
+                  backgroundColor: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '10px',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.85rem',
+                  outline: 'none'
+                }}
+              />
+            </div>
           </div>
         </div>
 
@@ -405,7 +461,7 @@ export default function CategoryPresetHub({ onTickerClick, mode = 'live' }) {
         )}
       </div>
 
-      {/* Main Stock Cards Grid */}
+      {/* Main Stock Table or Cards Grid */}
       {isLoading ? (
         <div style={{
           display: 'grid',
@@ -424,7 +480,261 @@ export default function CategoryPresetHub({ onTickerClick, mode = 'live' }) {
         <div className="card text-center" style={{ padding: '40px', color: 'var(--text-muted)' }}>
           Tidak ada emiten yang memenuhi kriteria pencarian / filter pada kategori ini.
         </div>
+      ) : viewMode === 'table' ? (
+        /* Screener Table View */
+        <div style={{ overflowX: 'auto', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+          <table
+            className="signal-table"
+            style={{
+              width: '100%',
+              borderCollapse: 'separate',
+              borderSpacing: '0',
+              fontSize: '13px',
+              background: 'rgba(10, 12, 16, 0.6)'
+            }}
+          >
+            <thead>
+              <tr
+                style={{
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  color: 'var(--text-secondary)',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                  textAlign: 'left'
+                }}
+              >
+                <th style={{ padding: '14px 16px' }}>Emiten</th>
+                <th style={{ padding: '14px 16px' }}>Harga Sekarang</th>
+                <th style={{ padding: '14px 16px' }}>Change %</th>
+                <th style={{ padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Target size={13} color="var(--bullish)" /> Target TP1
+                  </div>
+                </th>
+                <th style={{ padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Calendar size={13} color="#60a5fa" /> Estimasi ke TP
+                  </div>
+                </th>
+                <th style={{ padding: '14px 16px' }}>Trend</th>
+                <th style={{ padding: '14px 16px' }}>Score</th>
+                <th style={{ padding: '14px 16px' }}>Rekomendasi</th>
+                <th style={{ padding: '14px 16px' }}>Volume</th>
+                <th style={{ padding: '14px 16px', textAlign: 'center' }}>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredResults.map((item, idx) => {
+                const isUp = item.change_pct >= 0;
+                const isUptrend = item.trend === 'Bullish' || item.trend === 'Strong Bullish';
+                const tp1Val = item.tp1 || (item.last_price ? item.last_price * 1.03 : 0);
+                const tp1Pct = item.tp1_pct !== undefined && item.tp1_pct !== null
+                  ? item.tp1_pct
+                  : (item.last_price > 0 ? (((tp1Val - item.last_price) / item.last_price) * 100).toFixed(1) : '3.0');
+                const estDays = item.estimated_tp_range || (item.estimated_tp_days ? `${item.estimated_tp_days} Hari` : '2-4 Hari');
+
+                const formatIDR = (val) => new Intl.NumberFormat('id-ID').format(Math.round(val || 0));
+                const formatVol = (val) => {
+                  if (!val) return '0';
+                  if (val > 1000000000) return (val / 1000000000).toFixed(1) + 'B';
+                  if (val > 1000000) return (val / 1000000).toFixed(1) + 'M';
+                  if (val > 1000) return (val / 1000).toFixed(1) + 'K';
+                  return val;
+                };
+
+                return (
+                  <tr
+                    key={`${item.ticker}-${idx}`}
+                    onClick={() => onTickerClick(item.ticker)}
+                    className="signal-table-row"
+                    style={{
+                      borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                      cursor: 'pointer',
+                      transition: 'background 0.15s ease'
+                    }}
+                  >
+                    {/* Emiten */}
+                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontWeight: '800', fontSize: '14px', color: 'var(--text-primary)' }}>
+                          {item.ticker}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            maxWidth: '120px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}
+                        >
+                          {item.company_name}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Harga Sekarang */}
+                    <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontWeight: '800', fontSize: '14px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                      Rp{formatIDR(item.last_price)}
+                    </td>
+
+                    {/* Change % */}
+                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          fontWeight: '700',
+                          fontSize: '12px',
+                          color: isUp ? 'var(--bullish)' : 'var(--bearish)',
+                          fontFamily: 'monospace'
+                        }}
+                      >
+                        {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                        {isUp ? '+' : ''}{item.change_pct?.toFixed(2)}%
+                      </div>
+                    </td>
+
+                    {/* Target TP1 */}
+                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--bullish)', fontSize: '13px' }}>
+                        Rp{formatIDR(tp1Val)}
+                      </div>
+                      <div style={{ fontSize: '11px', color: 'var(--bullish)', opacity: 0.85 }}>
+                        +{tp1Pct}% Upside
+                      </div>
+                    </td>
+
+                    {/* Estimasi Sampai TP */}
+                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '3px 10px',
+                          borderRadius: '6px',
+                          background: 'rgba(96, 165, 250, 0.1)',
+                          border: '1px solid rgba(96, 165, 250, 0.25)',
+                          color: '#60a5fa',
+                          fontWeight: '700',
+                          fontSize: '11px'
+                        }}
+                      >
+                        <Calendar size={12} /> {estDays}
+                      </div>
+                    </td>
+
+                    {/* Trend */}
+                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          color: isUptrend ? 'var(--bullish)' : 'var(--warning)'
+                        }}
+                      >
+                        {item.trend}
+                      </span>
+                    </td>
+
+                    {/* Score */}
+                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '12px' }}>
+                          {item.score_display || `${item.score}%`}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Rekomendasi */}
+                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                      {(() => {
+                        const rec = (item.recommendation || '').toUpperCase();
+                        const isNotBuy = rec.includes('NOT BUY') || rec.includes('SELL') || rec.includes('AVOID') || rec.includes('RISK');
+                        const isBuy = !isNotBuy && rec.includes('BUY');
+                        const isWait = rec.includes('WAIT') || rec.includes('WATCH');
+                        const bg = isNotBuy ? 'rgba(244, 63, 94, 0.15)' : (isBuy ? 'rgba(74, 222, 128, 0.15)' : (isWait ? 'rgba(251, 191, 36, 0.15)' : 'rgba(255, 255, 255, 0.05)'));
+                        const color = isNotBuy ? 'var(--bearish)' : (isBuy ? 'var(--bullish)' : (isWait ? 'var(--warning)' : 'var(--text-secondary)'));
+                        const border = isNotBuy ? '1px solid rgba(244, 63, 94, 0.35)' : (isBuy ? '1px solid rgba(74, 222, 128, 0.35)' : (isWait ? '1px solid rgba(251, 191, 36, 0.35)' : '1px solid rgba(255, 255, 255, 0.1)'));
+
+                        return (
+                          <span
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              background: bg,
+                              color: color,
+                              border: border
+                            }}
+                          >
+                            {item.recommendation}
+                          </span>
+                        );
+                      })()}
+                    </td>
+
+                    {/* Volume */}
+                    <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--text-primary)' }}>
+                        {formatVol(item.volume)}
+                      </div>
+                      {item.volume_change_pct !== undefined && item.volume_change_pct !== null ? (
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            marginTop: '2px',
+                            color: item.volume_change_pct >= 0 ? 'var(--bullish)' : 'var(--bearish)'
+                          }}
+                        >
+                          {item.volume_change_pct >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                          {item.volume_change_pct >= 0 ? `+${item.volume_change_pct}%` : `${item.volume_change_pct}%`} vs MA20
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          Avg: {formatVol(item.avg_volume)}
+                        </div>
+                      )}
+                    </td>
+
+                    {/* Aksi */}
+                    <td style={{ padding: '14px 16px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTickerClick(item.ticker);
+                        }}
+                        style={{
+                          padding: '5px 10px',
+                          borderRadius: '6px',
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          color: 'var(--text-primary)',
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        Analisis <ArrowRight size={11} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : (
+        /* Card Grid View */
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',

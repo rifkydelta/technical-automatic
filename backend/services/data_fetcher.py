@@ -37,79 +37,96 @@ class DataFetcher:
     def fetch_ticker_info(self, ticker: str) -> Dict[str, Any]:
         """
         Fetch basic and profile information about the ticker.
+        Handles crumb and 401 errors gracefully with fast_info fallback.
         """
         yf_ticker = f"{ticker}.JK"
         stock = yf.Ticker(yf_ticker)
         
+        name = ticker
+        sector = "Unknown"
+        industry = "Unknown"
+        desc = f"PT {ticker} merupakan emiten yang terdaftar di Bursa Efek Indonesia (IDX)."
+        price = 0.0
+        div_yield = None
+        market_cap = None
+        pe_ratio = None
+        pb_ratio = None
+        ps_ratio = None
+        shares_out = None
+        
+        # 1. Try fast_info first (does not require crumb token)
         try:
-            info = stock.info
-            name = info.get("longName") or info.get("shortName") or ticker
-            sector = info.get("sector", "Unknown")
-            industry = info.get("industry", sector)
-            desc = info.get("longBusinessSummary") or info.get("description") or f"PT {name} merupakan emiten yang terdaftar di Bursa Efek Indonesia (IDX) pada sektor {sector}."
-            
-            price = info.get("currentPrice", info.get("regularMarketPrice", 0.0))
-            div_yield = normalize_dividend_yield(
-                info.get("dividendYield") or info.get("trailingAnnualDividendYield"),
-                dps=info.get("trailingAnnualDividendRate"),
-                current_price=price
-            )
-
-            return {
-                "name": name,
-                "sector": sector,
-                "industry": industry,
-                "description": desc,
-                "website": info.get("website", ""),
-                "employees": info.get("fullTimeEmployees"),
-                "city": info.get("city", "Indonesia"),
-                "address": info.get("address1", ""),
-                "shares_outstanding": info.get("sharesOutstanding"),
-                "float_shares": info.get("floatShares"),
-                "last_price": price,
-                "currency": info.get("currency", "IDR"),
-                "valuation": {
-                    "market_cap": info.get("marketCap"),
-                    "pe_ratio": info.get("trailingPE"),
-                    "pb_ratio": info.get("priceToBook"),
-                    "ps_ratio": info.get("priceToSalesTrailing12Months"),
-                    "dividend_yield": div_yield
-                },
-                "is_valid": True
-            }
+            if hasattr(stock, 'fast_info') and stock.fast_info:
+                fi = stock.fast_info
+                price = float(fi.get('lastPrice') or fi.get('regularMarketPrice') or 0.0)
+                market_cap = fi.get('marketCap')
+                shares_out = fi.get('shares')
         except Exception:
-            return {
-                "name": ticker,
-                "sector": "Unknown",
-                "industry": "Unknown",
-                "description": f"Informasi profil bisnis untuk {ticker} belum dapat dimuat dari data feed.",
-                "website": "",
-                "employees": None,
-                "city": "-",
-                "address": "-",
-                "shares_outstanding": None,
-                "float_shares": None,
-                "last_price": 0.0,
-                "currency": "IDR",
-                "valuation": None,
-                "is_valid": False
-            }
+            pass
 
-    def fetch_daily_only(self, ticker: str) -> pd.DataFrame:
+        # 2. Try stock.info with safe fallback
+        try:
+            info = stock.info or {}
+            if info:
+                name = info.get("longName") or info.get("shortName") or name
+                sector = info.get("sector", sector)
+                industry = info.get("industry", sector)
+                if info.get("longBusinessSummary"):
+                    desc = info.get("longBusinessSummary")
+                
+                if price == 0.0:
+                    price = float(info.get("currentPrice") or info.get("regularMarketPrice") or 0.0)
+                
+                div_yield = normalize_dividend_yield(
+                    info.get("dividendYield") or info.get("trailingAnnualDividendYield"),
+                    dps=info.get("trailingAnnualDividendRate"),
+                    current_price=price
+                )
+                market_cap = market_cap or info.get("marketCap")
+                pe_ratio = info.get("trailingPE")
+                pb_ratio = info.get("priceToBook")
+                ps_ratio = info.get("priceToSalesTrailing12Months")
+                shares_out = shares_out or info.get("sharesOutstanding")
+        except Exception:
+            pass
+
+        return {
+            "name": name,
+            "sector": sector,
+            "industry": industry,
+            "description": desc,
+            "website": "",
+            "employees": None,
+            "city": "Indonesia",
+            "address": "-",
+            "shares_outstanding": shares_out,
+            "float_shares": None,
+            "last_price": price,
+            "currency": "IDR",
+            "valuation": {
+                "market_cap": market_cap,
+                "pe_ratio": pe_ratio,
+                "pb_ratio": pb_ratio,
+                "ps_ratio": ps_ratio,
+                "dividend_yield": div_yield
+            },
+            "is_valid": True if price > 0 or name != ticker else False
+        }
+
+    def fetch_daily_only(self, ticker: str) -> Optional[pd.DataFrame]:
         """
         Fetch only Daily data to save bandwidth for the screener.
         """
         yf_ticker = f"{ticker}.JK"
-        daily_df = yf.download(yf_ticker, period="1y", interval="1d", progress=False)
-        
-        if daily_df.empty:
-            raise ValueError(f"No daily data found for {ticker}")
-            
-        # Clean multi-index columns if yfinance returns them
-        if isinstance(daily_df.columns, pd.MultiIndex):
-            daily_df.columns = daily_df.columns.get_level_values(0)
-            
-        return daily_df
+        try:
+            daily_df = yf.download(yf_ticker, period="1y", interval="1d", progress=False)
+            if daily_df.empty:
+                return None
+            if isinstance(daily_df.columns, pd.MultiIndex):
+                daily_df.columns = daily_df.columns.get_level_values(0)
+            return daily_df
+        except Exception:
+            return None
 
     def fetch_bulk_daily(self, tickers: list[str], period: str = "1mo") -> Dict[str, pd.DataFrame]:
         """
@@ -145,24 +162,44 @@ class DataFetcher:
 
     def fetch_stock_data(self, ticker: str) -> Dict[str, Any]:
         """
-        Fetch Daily, 1H, and 15M OHLCV data.
+        Fetch Daily, 1H, and 15M OHLCV data safely with robust error handling.
         """
         yf_ticker = f"{ticker}.JK"
         
-        # Daily data (1 year for EMA200)
-        daily_df = yf.download(yf_ticker, period="1y", interval="1d", progress=False)
-        
-        if daily_df.empty:
-            raise ValueError(f"No daily data found for {ticker}")
+        # 1. Daily data (1 year for EMA200)
+        try:
+            daily_df = yf.download(yf_ticker, period="1y", interval="1d", progress=False)
+        except Exception:
+            daily_df = pd.DataFrame()
             
-        # 1H data (730 days max for yfinance)
-        h1_df = yf.download(yf_ticker, period="730d", interval="1h", progress=False)
+        if daily_df.empty:
+            return {
+                "daily": pd.DataFrame(),
+                "h1": None,
+                "m15": None,
+                "m1": None
+            }
+            
+        # 2. 1H data (180 days avoids 730d API overflow limit and speeds up scan)
+        h1_df = pd.DataFrame()
+        try:
+            h1_df = yf.download(yf_ticker, period="180d", interval="1h", progress=False)
+        except Exception:
+            pass
         
-        # 15M data (60 days max for yfinance)
-        m15_df = yf.download(yf_ticker, period="60d", interval="15m", progress=False)
+        # 3. 15M data (60 days max for yfinance)
+        m15_df = pd.DataFrame()
+        try:
+            m15_df = yf.download(yf_ticker, period="60d", interval="15m", progress=False)
+        except Exception:
+            pass
         
-        # 1M data (7 days max, we use 5d just to be safe)
-        m1_df = yf.download(yf_ticker, period="5d", interval="1m", progress=False)
+        # 4. 1M data (5 days max for yfinance)
+        m1_df = pd.DataFrame()
+        try:
+            m1_df = yf.download(yf_ticker, period="5d", interval="1m", progress=False)
+        except Exception:
+            pass
         
         return {
             "daily": self._format_dataframe(daily_df),

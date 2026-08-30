@@ -251,12 +251,15 @@ def evaluate_relt_a_plus(daily_df: pd.DataFrame, reference_price: float) -> Dict
     if score < 70 or action not in ["ULTRA BUY", "STRONG BUY", "PULLBACK BUY"]:
         return {"passed": False, "reason": f"RELT Score {score}% ({action}) belum mencapai kriteria Buy Grade"}
 
+    vol_ma20 = float(daily_df['Volume'].tail(20).mean()) if len(daily_df) >= 20 else curr_volume
+
     return {
         "passed": True,
         "metrics": {
             "close": close_price,
             "change_pct": round(change_pct, 2),
             "volume": int(curr_volume),
+            "vol_ma20": round(vol_ma20, 0),
             "score": score,
             "rating": relt["rating"],
             "action": action,
@@ -302,12 +305,15 @@ def evaluate_relt_pullback(daily_df: pd.DataFrame, reference_price: float) -> Di
     if action not in ["PULLBACK BUY", "STRONG BUY", "ULTRA BUY"] and score < 60:
         return {"passed": False, "reason": f"Kriteria Pullback belum terpenuhi (Action: {action}, Score: {score}%)"}
 
+    vol_ma20 = float(daily_df['Volume'].tail(20).mean()) if len(daily_df) >= 20 else curr_volume
+
     return {
         "passed": True,
         "metrics": {
             "close": close_price,
             "change_pct": round(change_pct, 2),
             "volume": int(curr_volume),
+            "vol_ma20": round(vol_ma20, 0),
             "score": score,
             "rating": relt["rating"],
             "action": action,
@@ -353,12 +359,15 @@ def evaluate_relt_smc_breakout(daily_df: pd.DataFrame, reference_price: float) -
     if not has_smc_trigger:
         return {"passed": False, "reason": "Tidak ada sinyal konfirmasi Smart Money (OB/BOS/Sweep/Breakout)"}
 
+    vol_ma20 = float(daily_df['Volume'].tail(20).mean()) if len(daily_df) >= 20 else curr_volume
+
     return {
         "passed": True,
         "metrics": {
             "close": close_price,
             "change_pct": round(change_pct, 2),
             "volume": int(curr_volume),
+            "vol_ma20": round(vol_ma20, 0),
             "score": relt["score"],
             "rating": relt["rating"],
             "action": relt["action"],

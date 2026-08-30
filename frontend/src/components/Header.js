@@ -21,9 +21,10 @@ export default function Header({ data, mode = 'live' }) {
     if (!data?.ticker) return;
     setLivePrice(data.last_price);
 
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     const fetchLivePrice = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/price/${data.ticker}?mode=${mode}`);
+        const response = await fetch(`${API_URL}/api/price/${data.ticker}?mode=${mode}`);
         if (response.ok) {
           const result = await response.json();
           if (result && result.price) {
@@ -38,16 +39,15 @@ export default function Header({ data, mode = 'live' }) {
 
     const interval = setInterval(fetchLivePrice, 1000);
     return () => clearInterval(interval);
-  }, [data, mode]);
+  }, [data?.ticker, mode]);
 
   const handleOpenProfile = async () => {
     setIsProfileOpen(true);
-    if (data.company_profile) {
-      setProfileInfo(data.company_profile);
-    } else {
+    if (!profileInfo && data?.ticker) {
       setIsLoadingProfile(true);
       try {
-        const res = await fetch(`http://localhost:8000/api/ticker/ticker-info/${data.ticker}`);
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const res = await fetch(`${API_URL}/api/ticker/ticker-info/${data.ticker}`);
         if (res.ok) {
           const info = await res.json();
           setProfileInfo(info);
@@ -355,120 +355,89 @@ export default function Header({ data, mode = 'live' }) {
           })()}
         </div>
 
-        <div className="flex-col mobile-col-right" style={{ alignItems: 'flex-end', justifyContent: 'space-between', gap: '8px' }}>
+        {/* Right Section: Clean Live Price Hero Badge & Action Buttons */}
+        <div className="flex-col mobile-col-right" style={{ alignItems: 'flex-end', justifyContent: 'center', gap: '14px' }}>
+          {/* Live Price Widget */}
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              backgroundColor: 'rgba(255, 255, 255, 0.03)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: '16px',
+              padding: '12px 20px',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.25)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
+              <div className="live-dot" style={{ width: '6px', height: '6px', borderRadius: '50%' }} />
+              <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '700', fontFamily: 'var(--font-mono)' }}>
+                HARGA REALTIME ({liveLabel})
+              </span>
+            </div>
 
-          {/* Mini Overview Card */}
-          {(() => {
-            const getRecColor = (rec) => {
-              switch (rec) {
-                case 'STRONG BUY': return 'var(--bullish)';
-                case 'BUY': return 'var(--bullish)';
-                case 'WATCHLIST': return 'var(--warning)';
-                case 'NOT BUY': return 'var(--bearish)';
-                default: return 'var(--neutral)';
-              }
-            };
-            const recColor = getRecColor(data.recommendation);
-            const score5 = data.setup_score ? (data.setup_score.score / 20).toFixed(1) : '-';
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+              {(() => {
+                const todayBar = data.ohlcv_daily?.[data.ohlcv_daily.length - 1];
+                const openPrice = todayBar?.open;
+                const displayPrice = livePrice || data.last_price;
+                const pctChange = openPrice ? ((displayPrice - openPrice) / openPrice) * 100 : 0;
+                const pctColor = pctChange > 0 ? 'var(--bullish)' : (pctChange < 0 ? 'var(--bearish)' : 'var(--text-secondary)');
+                const diffVal = openPrice ? (displayPrice - openPrice) : 0;
 
-            const todayBar = data.ohlcv_daily?.[data.ohlcv_daily.length - 1];
-            const openPrice = todayBar?.open;
-            const displayPrice = livePrice || data.last_price;
-            const pctChange = openPrice ? ((displayPrice - openPrice) / openPrice) * 100 : 0;
-            const pctColor = pctChange > 0 ? 'var(--bullish)' : (pctChange < 0 ? 'var(--bearish)' : 'var(--text-secondary)');
-
-            const formatShortDate = (dateString) => {
-              if (!dateString) return '';
-              try {
-                const parts = dateString.split(' - ');
-                if (parts.length !== 2) return dateString;
-                const datePart = parts[0];
-                const timePart = parts[1].replace(' WIB', '');
-                const dateObj = new Date(datePart);
-                if (isNaN(dateObj)) return dateString;
-                const dd = String(dateObj.getDate()).padStart(2, '0');
-                const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-                const yy = String(dateObj.getFullYear()).slice(2);
-                return `${dd}/${mm}/'${yy} - ${timePart}`;
-              } catch {
-                return dateString;
-              }
-            };
-
-            return (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: 'rgba(255,255,255,0.02)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '16px',
-                padding: '14px 20px',
-                gap: '18px',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
-                marginTop: '16px',
-                flexWrap: 'wrap'
-              }}>
-                {/* 1. CURRENT PRICE (Live) */}
-                <div className="flex-col" style={{ alignItems: 'flex-start' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
-                      CURRENT PRICE ({liveLabel})
-                    </span>
-                    {mode === 'live' && <div className="live-dot" style={{ width: '6px', height: '6px', borderRadius: '50%' }}></div>}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '4px' }}>
-                    <span style={{ fontSize: '22px', fontWeight: 900, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', lineHeight: 1 }}>
-                      {displayPrice ? displayPrice.toLocaleString() : '-'}
+                return (
+                  <>
+                    <span style={{ fontSize: '28px', fontWeight: '900', fontFamily: 'var(--font-mono)', color: '#ffffff', lineHeight: '1.1' }}>
+                      {displayPrice ? `Rp${displayPrice.toLocaleString('id-ID')}` : '-'}
                     </span>
                     {openPrice && (
-                      <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: pctColor }}>
-                        {pctChange === 0 ? '' : (pctChange > 0 ? '▲ +' : '▼ ')}{pctChange.toFixed(2)}%
+                      <span
+                        style={{
+                          fontSize: '13px',
+                          fontFamily: 'var(--font-mono)',
+                          fontWeight: '800',
+                          color: pctColor,
+                          padding: '2px 6px',
+                          borderRadius: '4px',
+                          backgroundColor: pctChange >= 0 ? 'rgba(74, 222, 128, 0.12)' : 'rgba(244, 63, 94, 0.12)'
+                        }}
+                      >
+                        {pctChange > 0 ? `+${pctChange.toFixed(2)}%` : `${pctChange.toFixed(2)}%`}
                       </span>
                     )}
-                  </div>
-                  <span style={{ fontSize: '9.5px', color: 'var(--text-muted)', marginTop: '3px', opacity: 0.8, fontFamily: 'var(--font-mono)' }}>
-                    {formatShortDate(data.date)}
-                  </span>
-                </div>
-
-                {/* Separator */}
-                <div style={{ width: '1px', height: '38px', backgroundColor: 'rgba(255,255,255,0.1)' }}></div>
-
-                {/* 2. Score */}
-                <div className="flex-col" style={{ alignItems: 'center' }}>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Score</span>
-                  <span style={{ fontSize: '22px', fontWeight: 900, fontFamily: 'var(--font-mono)', color: recColor, lineHeight: 1, marginTop: '4px' }}>
-                    {score5}<span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>/5</span>
-                  </span>
-                </div>
-
-                {/* Separator */}
-                <div style={{ width: '1px', height: '38px', backgroundColor: 'rgba(255,255,255,0.1)' }}></div>
-
-                {/* 3. 1W Outlook */}
-                <div className="flex-col" style={{ alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: '10px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>1W Outlook</span>
-                  <span style={{
-                    fontSize: '15px',
-                    fontWeight: 900,
-                    letterSpacing: '0.05em',
-                    color: recColor,
-                    marginTop: '4px',
-                    textTransform: 'uppercase'
-                  }}>
-                    {data.recommendation || 'N/A'}
-                  </span>
-                </div>
-              </div>
-            );
-          })()}
-
-          <div className="flex-row items-center gap-sm">
-            <div className="text-xs font-mono text-secondary px-2 py-1 flex-row items-center gap-xs" style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <div className="live-dot" style={{ width: '6px', height: '6px', borderRadius: '50%' }}></div>
-              {data.date}
+                  </>
+                );
+              })()}
             </div>
+
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
+              Update: {data.date}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              onClick={handleOpenProfile}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.12)',
+                color: 'var(--text-secondary)',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '11px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Info size={13} />
+              Profil Emiten
+            </button>
 
             <button
               onClick={handleExport}
@@ -477,32 +446,20 @@ export default function Header({ data, mode = 'live' }) {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: 'var(--text-primary)',
-                padding: '6px 16px',
-                borderRadius: '6px',
-                fontSize: '0.75rem',
-                fontWeight: '600',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                color: '#60a5fa',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '11px',
+                fontWeight: '700',
                 cursor: isExporting ? 'not-allowed' : 'pointer',
                 opacity: isExporting ? 0.7 : 1,
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                if (!isExporting) {
-                  e.currentTarget.style.borderColor = 'var(--bullish)';
-                  e.currentTarget.style.color = 'var(--bullish)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isExporting) {
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                  e.currentTarget.style.color = 'var(--text-primary)';
-                }
+                transition: 'all 0.15s ease'
               }}
             >
-              <Share2 size={14} />
-              BAGIKAN
+              {isExporting ? <Loader2 size={13} className="animate-spin" /> : <Share2 size={13} />}
+              Bagikan
             </button>
           </div>
         </div>

@@ -619,8 +619,11 @@ export default function ReltSignalCard({ data }) {
                 <div style={{ fontSize: '20px', fontWeight: '800', fontFamily: 'var(--font-mono)', color: '#4ade80', lineHeight: '1.2' }}>
                   Rp {Math.round(trade_setup?.tp1 || 0).toLocaleString()}
                 </div>
-                <div className="text-xs text-muted" style={{ marginTop: '4px', fontSize: '11px' }}>
-                  Ambil Profit 50% Posisi
+                <div className="text-xs text-muted" style={{ marginTop: '4px', fontSize: '11px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Ambil Profit 50% Posisi</span>
+                  <span style={{ color: '#60a5fa', fontWeight: '700' }}>
+                    Est. {trade_setup?.estimated_tp_range || (trade_setup?.estimated_tp_days ? `${trade_setup.estimated_tp_days} Hari` : '1-2 Hari')}
+                  </span>
                 </div>
               </div>
             </div>

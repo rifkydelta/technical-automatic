@@ -16,7 +16,7 @@ Features:
 import math
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, Optional
+from typing import List, Dict, Any, Optional
 
 try:
     import talib
@@ -223,18 +223,18 @@ class ReltSignalEngine:
         long_liquidity_ref = last_swing_low if (last_swing_low is not None and last_swing_low < cur_price) else base_sl_lowest
         long_hunt_sl = long_liquidity_ref - (atr_val * 0.35)
         long_wide_atr_sl = cur_price - (atr_val * 1.5)
-        adaptive_long_sl = min(long_wide_atr_sl, long_hunt_sl)
+        adaptive_long_sl = max(long_wide_atr_sl, long_hunt_sl)
 
         positive_long_bias = bool(bullish_trend or (cur_price > ema_fast and macd_line > macd_sig and volume_ok) or (st_bullish and cur_price > ema_fast) or smc_res["liquidity_sweep_low"])
 
         stop_loss = adaptive_long_sl if positive_long_bias else base_initial_sl
         
-        # Ensure SL is strictly protective (max 6% risk, min 2% risk buffer)
+        # Ensure SL is strictly protective (max 10% risk floor, min 2% risk buffer)
         if stop_loss >= cur_price or np.isnan(stop_loss):
             stop_loss = cur_price * 0.95
         else:
-            # Enforce max 6% risk floor on daily swings
-            stop_loss = max(stop_loss, cur_price * 0.94)
+            # Enforce max 10% risk floor on daily swings (protecting from abnormal outliers)
+            stop_loss = max(stop_loss, cur_price * 0.90)
             # Enforce minimum 2% breathing room
             stop_loss = min(stop_loss, cur_price * 0.98)
 
@@ -242,6 +242,19 @@ class ReltSignalEngine:
         price_risk = cur_price - stop_loss
         tp1 = round(cur_price + (price_risk * 1.3), 2)
         tp2 = round(cur_price + (price_risk * 2.0), 2)
+
+        tp1_pct = round(((tp1 - cur_price) / cur_price * 100.0), 2) if cur_price > 0 else 0.0
+        tp2_pct = round(((tp2 - cur_price) / cur_price * 100.0), 2) if cur_price > 0 else 0.0
+
+        tp1_distance = abs(tp1 - cur_price)
+        daily_movement_pace = max(atr_val * 0.75, cur_price * 0.008)
+        estimated_tp_days = max(1, int(round(tp1_distance / daily_movement_pace))) if daily_movement_pace > 0 else 2
+        if estimated_tp_days == 1:
+            estimated_tp_range = "1-2 Hari"
+        elif estimated_tp_days <= 3:
+            estimated_tp_range = f"{estimated_tp_days}-{estimated_tp_days + 2} Hari"
+        else:
+            estimated_tp_range = f"{estimated_tp_days}-{estimated_tp_days + 3} Hari"
 
         trail_pct = 3.0 * (4.0 if score >= 60.0 else 1.0)
         trailing_sl = round(cur_price * (1.0 - trail_pct / 100.0), 2)
@@ -365,6 +378,10 @@ class ReltSignalEngine:
                 "risk_reward_ratio": rr_ratio,
                 "risk_per_share": round(price_risk, 2),
                 "risk_percent": round((price_risk / cur_price * 100.0), 2) if cur_price > 0 else 0.0,
+                "tp1_percent": tp1_pct,
+                "tp2_percent": tp2_pct,
+                "estimated_tp_days": estimated_tp_days,
+                "estimated_tp_range": estimated_tp_range,
                 "account_size_idr": account_size_idr,
                 "risk_per_trade_pct": risk_per_trade_pct,
                 "recommended_lots": recommended_lots,
@@ -389,6 +406,117 @@ class ReltSignalEngine:
                 "atr": round(atr_val, 2)
             }
         }
+
+    def detect_signals_historical(
+        self,
+        daily_df: pd.DataFrame,
+        reference_price: float = 0.0,
+        signal_mode: str = "Balanced",
+        entry_mode: str = "Hybrid",
+        lookback_bars: int = 15,
+        mtf_bullish: bool = True
+    ) -> List[Dict[str, Any]]:
+        """
+        Iterate bar-by-bar across the lookback_bars window on daily_df to detect
+        historical BUY and SELL signals at the exact bar/date they were triggered on the chart.
+        Follows TradingView Pine Script logic (buySignal = ... and not tradeWasActive).
+        """
+        if daily_df is None or daily_df.empty or len(daily_df) < 20:
+            return []
+
+        df = daily_df.copy()
+        n = len(df)
+        start_idx = max(20, n - min(lookback_bars, n))
+
+        signals = []
+        in_trade = False
+        stop_loss = 0.0
+        tp1 = 0.0
+        tp2 = 0.0
+        trailing_sl = 0.0
+        tp1_hit = False
+
+        for i in range(start_idx, n):
+            past_slice = df.iloc[:i + 1]
+            cur_row = df.iloc[i]
+            cur_close = float(cur_row['Close'])
+            cur_high = float(cur_row['High'])
+            cur_low = float(cur_row['Low'])
+            raw_time = cur_row.name
+
+            # Format candle date and full market close timestamp (16:00:00 WIB)
+            if hasattr(raw_time, 'strftime'):
+                signal_date = raw_time.strftime("%Y-%m-%d")
+            else:
+                signal_date = str(raw_time)[:10]
+            signal_time = f"{signal_date} 16:00:00"
+
+            # Check trade management / exits if in trade
+            if in_trade:
+                new_trail = cur_close * 0.965
+                trailing_sl = max(trailing_sl, new_trail)
+
+                # Check if trade exited on this bar
+                exited = False
+                if cur_low <= stop_loss or cur_low <= trailing_sl or cur_high >= tp2:
+                    exited = True
+                elif cur_high >= tp1 and not tp1_hit:
+                    tp1_hit = True
+                    trailing_sl = max(trailing_sl, stop_loss + (cur_close - stop_loss) * 0.5)
+
+                if exited:
+                    in_trade = False
+                    tp1_hit = False
+
+            # Run full RELT analysis for this bar slice
+            ref_p = reference_price if (i == n - 1 and reference_price > 0) else cur_close
+            relt = self.analyze(
+                daily_df=past_slice,
+                reference_price=ref_p,
+                signal_mode=signal_mode,
+                entry_mode=entry_mode,
+                mtf_bullish=mtf_bullish
+            )
+
+            action = relt.get("action", "WAIT")
+            score = relt.get("score", 0)
+            is_no_trade = relt.get("is_no_trade_zone", False)
+            dir_pred = relt.get("direction_prediction", {})
+            direction = dir_pred.get("direction", "SIDEWAYS")
+
+            is_buy = action in ["ULTRA BUY", "STRONG BUY", "PULLBACK BUY", "WATCH BUY"] and not is_no_trade
+            is_sell = (action == "RISK WARNING") or (direction == "DOWN" and score < 45)
+
+            if is_buy and not in_trade:
+                in_trade = True
+                setup = relt.get("trade_setup", {})
+                stop_loss = setup.get("stop_loss", cur_close * 0.95)
+                tp1 = setup.get("tp1", cur_close * 1.05)
+                tp2 = setup.get("tp2", cur_close * 1.10)
+                trailing_sl = cur_close * 0.965
+                tp1_hit = False
+
+                signals.append({
+                    "signal_date": signal_date,
+                    "signal_time": signal_time,
+                    "signal_type": "BUY",
+                    "entry_price": round(cur_close, 2),
+                    "relt": relt,
+                    "bar_index": i,
+                    "is_latest_bar": (i == n - 1)
+                })
+            elif is_sell and not in_trade:
+                signals.append({
+                    "signal_date": signal_date,
+                    "signal_time": signal_time,
+                    "signal_type": "SELL",
+                    "entry_price": round(cur_close, 2),
+                    "relt": relt,
+                    "bar_index": i,
+                    "is_latest_bar": (i == n - 1)
+                })
+
+        return signals
 
     def _empty_result(self, reference_price: float) -> Dict[str, Any]:
         return {
@@ -435,6 +563,10 @@ class ReltSignalEngine:
                 "risk_reward_ratio": 1.5,
                 "risk_per_share": reference_price * 0.05,
                 "risk_percent": 5.0,
+                "tp1_percent": 5.0,
+                "tp2_percent": 10.0,
+                "estimated_tp_days": 2,
+                "estimated_tp_range": "2-4 Hari",
                 "account_size_idr": 10_000_000,
                 "risk_per_trade_pct": 1.0,
                 "recommended_lots": 0,

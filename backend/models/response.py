@@ -416,6 +416,10 @@ class ReltTradeSetup(BaseModel):
     risk_reward_ratio: float = 0.0
     risk_per_share: float = 0.0
     risk_percent: float = 0.0
+    tp1_percent: float = 0.0
+    tp2_percent: float = 0.0
+    estimated_tp_days: Optional[int] = None
+    estimated_tp_range: Optional[str] = None
     account_size_idr: float = 10000000.0
     risk_per_trade_pct: float = 1.0
     recommended_lots: int = 0
@@ -503,6 +507,9 @@ class ScreenerResult(BaseModel):
     change_pct: float
     volume: int
     avg_volume: float
+    volume_change_pct: Optional[float] = None
+    volume_trend: Optional[str] = None
+    volume_ratio: Optional[float] = None
     trend: str
     recommendation: str
     score: int
@@ -511,8 +518,57 @@ class ScreenerResult(BaseModel):
     relt_score: Optional[int] = None
     relt_rating: Optional[str] = None
     relt_action: Optional[str] = None
+    tp1: Optional[float] = None
+    tp2: Optional[float] = None
+    tp1_pct: Optional[float] = None
+    estimated_tp_days: Optional[int] = None
+    estimated_tp_range: Optional[str] = None
 
 class ScreenerResponse(BaseModel):
     data: List[ScreenerResult]
     session_info: SessionInfo
+
+class SignalRow(BaseModel):
+    id: Optional[int] = None
+    ticker: str
+    company_name: str = ""
+    signal_type: str = "BUY"            # "BUY" | "SELL"
+    signal_date: str = ""               # Candle date "YYYY-MM-DD"
+    signal_time: str                    # Full timestamp string e.g. "YYYY-MM-DD 16:00:00"
+    backtest_winrate: float = 0.0       # % win rate
+    backtest_total_trades: int = 0
+    backtest_total_pnl: float = 0.0     # % cumulative
+    relt_score: int = 0
+    relt_rating: str = ""               # "A+ Strong Buy", "A Buy", "B Watch", etc.
+    relt_action: str = ""               # "ULTRA BUY", "STRONG BUY", "PULLBACK BUY", "RISK WARNING"
+    entry_price: float = 0.0            # Execution price
+    stop_loss: float = 0.0
+    tp1: float = 0.0
+    tp2: float = 0.0
+    h1_entry_zone_low: float = 0.0      # 1H zone low
+    h1_entry_zone_high: float = 0.0     # 1H zone high
+    h1_entry_status: str = "ENTRY NOW"  # "ENTRY NOW" | "WAIT FOR PULLBACK" | "AGGRESSIVE DIP"
+    h1_confirmation: str = ""           # 1H confirmation rationale
+    minute_bar_open: float = 0.0        # Minute bar open price
+    projected_pnl_pct: float = 0.0      # Projected PnL %
+    projected_pnl_nominal: float = 0.0  # Projected PnL IDR per 1 lot
+    direction: str = "UP"               # "UP" | "DOWN" | "SIDEWAYS"
+    status: str = "OPEN"                # "OPEN" | "HIT_TP1" | "HIT_TP2" | "HIT_SL" | "CLOSED"
+    actual_exit_price: Optional[float] = 0.0
+    actual_pnl_pct: Optional[float] = 0.0
+
+class SignalScanResponse(BaseModel):
+    scan_time: str
+    total_scanned: int
+    signals_found: int
+    signals: List[SignalRow]
+
+class SignalStatsResponse(BaseModel):
+    total_signals: int = 0
+    buy_count: int = 0
+    sell_count: int = 0
+    avg_winrate: float = 0.0
+    avg_proj_pnl: float = 0.0
+    best_performer: Optional[str] = None
+    best_pnl: Optional[float] = 0.0
 

@@ -930,3 +930,60 @@ button:active {
   border-radius: 8px;
 }
 
+/* ── Signal Dashboard & Table Styles ── */
+.signal-dashboard-container {
+  width: 100%;
+  max-width: 100%;
+}
+
+.signal-table-row:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.signal-table th {
+  user-select: none;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.signal-table th:hover {
+  color: var(--text-primary);
+}
+
+.signal-modal-overlay {
+  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.signal-modal-content {
+  animation: modalSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 860px) {
+  .desktop-market-badge {
+    display: none !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .desktop-nav {
+    display: none !important;
+  }
+  .mobile-menu-btn {
+    display: flex !important;
+  }
+}
+
+

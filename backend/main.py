@@ -1,12 +1,21 @@
 import os
 import logging
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.endpoints import analyze, ticker, news, market
+from api.endpoints import analyze, ticker, news, market, signal
+from db import init_db
 
 # Load environment variables
 load_dotenv()
+
+# ── Lifespan (Startup / Shutdown) ──────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize SQLite database on startup
+    await init_db()
+    yield
 
 # ── Logging ────────────────────────────────────────────────────────
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -25,6 +34,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs" if ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if ENVIRONMENT == "development" else None,
+    lifespan=lifespan
 )
 
 # ── CORS ───────────────────────────────────────────────────────────
@@ -48,6 +58,7 @@ app.include_router(analyze.router, prefix="/api", tags=["analyze"])
 app.include_router(ticker.router, prefix="/api", tags=["ticker"])
 app.include_router(news.router, prefix="/api", tags=["news"])
 app.include_router(market.router, prefix="/api", tags=["market"])
+app.include_router(signal.router, prefix="/api", tags=["signal"])
 
 
 @app.get("/")

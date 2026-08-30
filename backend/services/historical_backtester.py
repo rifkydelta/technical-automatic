@@ -179,6 +179,138 @@ class HistoricalBacktester:
             trade_logs=sorted_logs
         )
 
+    def extract_all_relt_signals(
+        self,
+        daily_df: pd.DataFrame,
+        lookback_days: int = 365,
+        signal_mode: str = "Balanced",
+        entry_mode: str = "Hybrid"
+    ) -> List[Dict[str, Any]]:
+        """
+        Runs the multi-bar RELT simulation over lookback_days and extracts all historical
+        signals (both active OPEN positions and completed trades with actual PnL).
+        """
+        if daily_df is None or daily_df.empty or len(daily_df) < 30:
+            return []
+
+        df = daily_df.copy()
+        n = len(df)
+        start_idx = max(25, n - min(lookback_days, n))
+
+        signals = []
+        in_trade = False
+        entry_price = 0.0
+        stop_loss = 0.0
+        tp1 = 0.0
+        tp2 = 0.0
+        trailing_sl = 0.0
+        entry_date_iso = ""
+        entry_relt = {}
+        tp1_hit = False
+
+        for i in range(start_idx, n):
+            past_slice = df.iloc[:i + 1]
+            cur_row = df.iloc[i]
+            cur_close = float(cur_row['Close'])
+            cur_high = float(cur_row['High'])
+            cur_low = float(cur_row['Low'])
+            raw_time = cur_row.name
+            iso_time_str = raw_time.strftime("%Y-%m-%d") if hasattr(raw_time, 'strftime') else str(raw_time)[:10]
+
+            if not in_trade:
+                # Evaluate RELT Strategy Entry
+                relt = self.relt_engine.analyze(
+                    daily_df=past_slice,
+                    reference_price=cur_close,
+                    signal_mode=signal_mode,
+                    entry_mode=entry_mode,
+                    mtf_bullish=True
+                )
+
+                action = relt.get("action", "WAIT")
+                is_buy_signal = action in ["ULTRA BUY", "STRONG BUY", "PULLBACK BUY"] and not relt.get("is_no_trade_zone", False)
+
+                if is_buy_signal:
+                    in_trade = True
+                    entry_price = cur_close
+                    entry_date_iso = iso_time_str
+                    entry_relt = relt
+                    setup = relt.get("trade_setup", {})
+                    stop_loss = setup.get("stop_loss", cur_close * 0.95)
+                    tp1 = setup.get("tp1", cur_close * 1.05)
+                    tp2 = setup.get("tp2", cur_close * 1.10)
+                    trailing_sl = cur_close * 0.965
+                    tp1_hit = False
+
+            else:
+                # In Trade - update trailing SL
+                new_trail = cur_close * 0.965
+                trailing_sl = max(trailing_sl, new_trail)
+
+                # Check Exits matching reltsignal.pine
+                status_raw = None
+                exit_price = 0.0
+
+                if cur_low <= stop_loss:
+                    status_raw = "HIT_SL"
+                    exit_price = stop_loss
+                elif cur_low <= trailing_sl and (tp1_hit or cur_close > entry_price):
+                    status_raw = "CLOSED"
+                    exit_price = trailing_sl
+                elif cur_high >= tp2:
+                    status_raw = "HIT_TP2"
+                    exit_price = tp2
+                elif cur_high >= tp1 and not tp1_hit:
+                    tp1_hit = True
+                    trailing_sl = max(trailing_sl, entry_price * 1.01)
+
+                if not status_raw and len(past_slice) >= 15:
+                    st_res = self.supertrend_engine.calculate(past_slice)
+                    if st_res.get("st_trend") == "Bearish":
+                        status_raw = "CLOSED"
+                        exit_price = cur_close
+
+                if status_raw:
+                    pnl_pct = ((exit_price - entry_price) / entry_price * 100.0) if entry_price > 0 else 0.0
+                    signals.append({
+                        "signal_date": entry_date_iso,
+                        "signal_time": f"{entry_date_iso} 16:00:00",
+                        "signal_type": "BUY",
+                        "entry_price": round(entry_price, 2),
+                        "stop_loss": round(stop_loss, 2),
+                        "tp1": round(tp1, 2),
+                        "tp2": round(tp2, 2),
+                        "status": status_raw,
+                        "actual_exit_price": round(exit_price, 2),
+                        "actual_pnl_pct": round(pnl_pct, 2),
+                        "relt": entry_relt,
+                        "exit_date": iso_time_str
+                    })
+                    in_trade = False
+
+        # If trade is still open at the latest bar
+        if in_trade:
+            final_close = float(df['Close'].iloc[-1])
+            pnl_pct = ((final_close - entry_price) / entry_price * 100.0) if entry_price > 0 else 0.0
+            signals.append({
+                "signal_date": entry_date_iso,
+                "signal_time": f"{entry_date_iso} 16:00:00",
+                "signal_type": "BUY",
+                "entry_price": round(entry_price, 2),
+                "stop_loss": round(stop_loss, 2),
+                "tp1": round(tp1, 2),
+                "tp2": round(tp2, 2),
+                "status": "OPEN",
+                "actual_exit_price": round(final_close, 2),
+                "actual_pnl_pct": round(pnl_pct, 2),
+                "relt": entry_relt,
+                "exit_date": None
+            })
+
+        # Return signals sorted latest entry first
+        signals.sort(key=lambda s: s["signal_date"], reverse=True)
+        return signals
+
     def run_backtest(self, daily_df: pd.DataFrame, m15_df: pd.DataFrame) -> List[BacktestSummary]:
         """
         Runs comprehensive multi-timeframe backtests:

@@ -27,3 +27,12 @@ class CustomScreenerExecuteRequest(BaseModel):
     mode: str = Field("live", description="Analysis mode: 'live', 'session_1', 'close_market'")
     custom_tickers: Optional[list[str]] = Field(None, description="Optional custom tickers override; if omitted, scans full IDX universe")
 
+class SignalScanRequest(BaseModel):
+    tickers: Optional[list[str]] = Field(None, description="Optional list of tickers to scan; if empty, scans full IDX universe")
+    max_workers: Optional[int] = Field(6, description="Parallel worker threads")
+
+class SignalStatusUpdateRequest(BaseModel):
+    status: str = Field(..., description="'OPEN', 'HIT_TP1', 'HIT_TP2', 'HIT_SL', 'CLOSED'")
+    actual_exit_price: Optional[float] = Field(None, description="Actual realized exit price")
+    actual_pnl_pct: Optional[float] = Field(None, description="Actual realized PnL percentage")
+
