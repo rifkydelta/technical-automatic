@@ -34,11 +34,11 @@ Dibangun dengan arsitektur modern berkecepatan tinggi (**FastAPI** di sisi backe
 
 ## 🚀 8 Pilar Fitur Utama (Core Pillars)
 
-### 1. 📡 Live Signal Scanner (Realtime 1H Intraday & Daily Parity)
-- Pemindai otomatis 800+ emiten bursa dengan filter tren ketat (*Strict Trend Regime Gate*).
-- Deteksi jam eksekusi bursa presisi pada grafik 1-Jam (*1H Entry Area & Confirmation Status*).
-- Riwayat performa dan *backtest win rate* transparan untuk setiap trade signal (Grade A+, A, B).
-- Toolbar interaktif dengan pencarian kode saham instan dan filter status (*Hanya OPEN, Ultra/Strong Buy, TP Hit, SL Hit*).
+### 1. 📡 Live Signal Radar (Server-Side Pagination & Precision Datepicker)
+- **Akses Lengkap 2.860+ Sinyal**: Navigasi data tanpa batas menggunakan pagination server-side (`LIMIT` & `OFFSET`) dengan pilihan 25, 50, 100, atau 200 baris per halaman.
+- **Precision Calendar Datepicker**: Filter tanggal transaksi spesifik berformat ISO `YYYY-MM-DD` atau pilih dari shortcut sesi perdagangan teraktif.
+- **Siklus Hidup Terkonfirmasi**: Filter transparan untuk status `🟢 Aktif / Entry`, `🚀 Hit TP (TP1/TP2)`, `🛑 Stop Loss`, dan `🏁 Closed Trade`.
+- **4 Clickable Live KPI Cards**: Ribbon metrik beranda interaktif yang langsung membuka tabel sinyal terfilter.
 
 ### 2. ⚡ High-Probability RELT Quantitative Trading Engine
 - **10-Factor Scoring Model**: Evaluasi komprehensif dari 0 hingga 100 berdasarkan tren makro, momentum, volume surge, order block, FVG, dan rasio risiko.
@@ -48,70 +48,38 @@ Dibangun dengan arsitektur modern berkecepatan tinggi (**FastAPI** di sisi backe
 
 ### 3. 🧠 Smart Money Concepts (SMC) & Deteksi Pola Grafik
 - Deteksi otomatis Fair Value Gaps (*Bullish & Bearish FVG*), Order Blocks (OB), Break of Structure (BOS), Change of Character (CHOCH), dan Liquidity Sweeps.
-- Pengenalan pola grafik klasik (*Double Bottom, Head & Shoulders, Ascending Triangle, Channel*) dan pola candlestick impulsif (*Hammer, Bullish Engulfing, Morning Star*).
+- Pengenalan 10 pola grafik klasik (*Double Bottom, Cup & Handle, Ascending Triangle, Head & Shoulders, Flags, Wedges*) dengan visualisasi target harga.
 
-### 4. 🤖 360° AI Analyst Engine & Prompt Hub
-- Ekstraksi 100% data kuantitatif komprehensif (Finansial 4-Tahun, 9-Poin Piotroski F-Score, 8-Variabel Beneish M-Score, Level Pivot Fibonacci, Order Blocks, dan 15 Berita terkini).
-- 1-Klik Launcher ke 5 Provider AI terdepan: **ChatGPT (GPT-4o/o3-mini)**, **Claude (Claude 3.7 Sonnet)**, **DeepSeek (DeepSeek R1)**, **Google Gemini (Gemini 2.0 Pro)**, dan **Perplexity**.
-- Kustomisasi Posisi Modal (*Average Price & Realtime Floating PnL %*), validasi skema JSON 6-badge, serta rendering **Executive Research Dashboard** dengan *Radial Conviction Gauge (0-100)*.
+### 4. ⏰ Mesin Waktu Eksekusi 1-Jam Intraday (1H Entry Timing Engine)
+- Memetakan sinyal Daily ke grafik 1-Jam untuk menemukan jam eksekusi bursa terbaik.
+- Penentuan area entry presisi (`ZoneLow` — `ZoneHigh`) dan status `ENTRY NOW` vs `WAIT FOR PULLBACK`.
 
-### 5. 🔗 Stockbit Adaptive Market Bridge
-- Integrasi tombol 1-klik adaptif di Header Toolbar, Top Breadcrumb, dan Modal Profil Emiten yang langsung membuka stream diskusi komunitas dan sentimen emiten di **Stockbit** (`https://stockbit.com/symbol/{TICKER}`).
+### 5. 🔍 Forensik Laba & Valuasi Multi-Model
+- **Piotroski 9-Point F-Score**: Evaluasi kekuatan fundamental dan efisiensi operasional.
+- **Beneish 8-Ratio M-Score**: Deteksi dini potensi manipulasi laporan keuangan akrual.
+- **5 Model Valuasi Konsensus**: DCF 2-Stage, Graham Formula, PBV vs ROE Fair Band, PE Multiple, dan Nilai Buku Berwujud Bersih.
 
-### 6. 💎 Forensik Laba & Valuasi Fundamental Multi-Model
-- **Multi-Model Fair Value**: Discounted Cash Flow (DCF), Benjamin Graham Number, Peter Lynch Fair Value, dan PBV Historical Band.
-- **Audit Forensik Kualitas Laba**:
-  - **Piotroski 9-Point F-Score** (Rentabilitas, Solvabilitas, Efisiensi Operasional).
-  - **Beneish 8-Variable M-Score** (Deteksi Rekayasa & Manipulasi Laba).
-  - **Altman Z-Score** & **DuPont 3-Way ROE Decomposition**.
-- Analisis pertumbuhan 3-tahun: Revenue CAGR, Net Income CAGR, ROE, ROA, DER, dan Cash Flow Quality Ratio.
+### 6. 🌐 Jembatan Komunitas Saham Stockbit Terintegrasi
+- Tombol akses cepat 1-klik menuju forum diskusi publik, stream berita, dan feeds emiten terkait di Stockbit.
 
-### 7. 🔍 Multi-Strategy Screener & Preset Hub
-- Preset bawaan: **Bluechip LQ45**, **High Dividend Yield**, **BPJS Daytrade**, **BSJP 15:30 (Beli Sore Jual Pagi)**, **Rebound MA20**, dan **Breakout 52-Week High**.
-- Pemindaian paralel multi-emiten dengan komparasi volume 20-hari dan estimasi durasi pencapaian target.
+### 7. 🤖 AI Market Intelligence & Prompt Engine 360°
+- Ekstraksi 100% data pasar dan fundamental menjadi master prompt siap salin untuk ChatGPT, Claude, DeepSeek R1, Gemini, dan Perplexity.
+- Importer respon JSON dengan 6 Schema Integrity Badges dan Executive Research Dashboard interaktif.
 
-### 8. 📚 Learning Center & Strategy Knowledge Hub
-- 8 modul edukasi interaktif mengenai SMC, Order Flow, ATR Volatilitas, Risk Management, Psikologi Trading, dan Panduan Praktis Stop Loss.
+### 8. 🎨 Anti-Slop Institutional Liquid-Glass Design System
+- Dibangun dengan standar estetika `taste-skill`: tipografi solid bebas gradasi pelangi acak, 4 token border-radius baku, micro-interactions cair, dan tata letak responsif 2-kolom split hero.
 
 ---
 
-## 🛠️ Arsitektur Teknologi (Tech Stack)
+## 📚 Daftar Dokumentasi Lengkap (Documentation Suite)
 
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                          FRONTEND APPLICATION                          │
-│     Next.js 16 (Turbopack) • React 19 • Vanilla CSS Design System      │
-│     Lightweight Charts v4 • TradingView Widgets • Lucide Icons         │
-│     AI Executive Dashboard • Live Schema Validator • Stockbit Bridge   │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ (REST API / Async HTTP)
-┌───────────────────────────────────▼────────────────────────────────────┐
-│                           BACKEND ENGINE                               │
-│     FastAPI • Python 3.12 • Pandas • NumPy • TA-Lib • yfinance         │
-│     AiPromptService (360° Extractor) • RELT 10-Factor Engine           │
-│     In-Memory TTL Caching (30s) • Multi-Threaded Concurrent Workers     │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-┌───────────────────────────────────▼────────────────────────────────────┐
-│                         PERSISTENT STORAGE                             │
-│     SQLite 3 in High-Concurrency WAL Mode (signals.db)                 │
-└────────────────────────────────────────────────────────────────────────┘
-```
+Seluruh aspek teknis terdokumentasi lengkap dalam 8 berkas panduan di direktori `docs/`:
 
----
-
-## 📚 Navigasi Berkas Dokumentasi Lengkap
-
-1. [🏛️ **Arsitektur Sistem & Aliran Data** (`docs/2_SYSTEM_ARCHITECTURE.md`)](./2_SYSTEM_ARCHITECTURE.md)
-2. [📐 **Spesifikasi Algoritma Kuantitatif, SMC & Forensik** (`docs/3_QUANTITATIVE_ALGORITHMS.md`)](./3_QUANTITATIVE_ALGORITHMS.md)
-3. [🌐 **Spesifikasi REST API Lengkap** (`docs/4_API_SPECIFICATION.md`)](./4_API_SPECIFICATION.md)
-4. [🎨 **Frontend Design System & Charting Engine** (`docs/5_FRONTEND_DESIGN_SYSTEM.md`)](./5_FRONTEND_DESIGN_SYSTEM.md)
-5. [💾 **Database Schema & SQLite WAL Concurrency** (`docs/6_DATABASE_SCHEMA_WAL.md`)](./6_DATABASE_SCHEMA_WAL.md)
-6. [🚀 **Panduan Deployment & Operasional** (`docs/7_DEPLOYMENT_OPERATIONS.md`)](./7_DEPLOYMENT_OPERATIONS.md)
-7. [🤖 **Master AI Analyst & Prompt Intelligence Engine** (`docs/8_AI_ANALYST_ENGINE.md`)](./8_AI_ANALYST_ENGINE.md)
-
----
-
-## 👨‍💻 Pengembang & Lisensi
-- **Lead Developer**: [@rifkydelta](https://github.com/rifkydelta)
-- **Lisensi**: Proprietary / Hak Cipta Dilindungi Undang-Undang.
+1. [**`1_README.md`**](file:///c:/technical-automatic/docs/1_README.md): Ringkasan Proyek & Fitur Lengkap *(Dokumen ini)*.
+2. [**`2_SYSTEM_ARCHITECTURE.md`**](file:///c:/technical-automatic/docs/2_SYSTEM_ARCHITECTURE.md): Arsitektur Sistem, Aliran Data & Diagram Sequence Paginasi.
+3. [**`3_QUANTITATIVE_ALGORITHMS.md`**](file:///c:/technical-automatic/docs/3_QUANTITATIVE_ALGORITHMS.md): Rumus Kuantitatif RELT, SL/TP Bounds & Forensik Laba.
+4. [**`4_API_SPECIFICATION.md`**](file:///c:/technical-automatic/docs/4_API_SPECIFICATION.md): Spesifikasi Endpoint REST API & Skema JSON.
+5. [**`5_FRONTEND_DESIGN_SYSTEM.md`**](file:///c:/technical-automatic/docs/5_FRONTEND_DESIGN_SYSTEM.md): Design Tokens, Anti-Slop Principles & Komponen UI.
+6. [**`6_DATABASE_SCHEMA_WAL.md`**](file:///c:/technical-automatic/docs/6_DATABASE_SCHEMA_WAL.md): Skema SQLite WAL, Indexing & Query Paginasi.
+7. [**`7_DEPLOYMENT_OPERATIONS.md`**](file:///c:/technical-automatic/docs/7_DEPLOYMENT_OPERATIONS.md): Panduan Deployment 1-Klik, CLI & Operasional.
+8. [**`8_AI_ANALYST_ENGINE.md`**](file:///c:/technical-automatic/docs/8_AI_ANALYST_ENGINE.md): Arsitektur Prompt Generator AI 360° & JSON Parser.

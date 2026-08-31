@@ -234,29 +234,6 @@ function AnalysisContent({ params }) {
 
         {/* Action Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <a
-            href={`https://stockbit.com/symbol/${ticker}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={`Buka ${ticker} di Stockbit`}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 14px',
-              borderRadius: '8px',
-              backgroundColor: 'rgba(16, 185, 129, 0.12)',
-              border: '1px solid rgba(16, 185, 129, 0.3)',
-              color: '#34d399',
-              fontSize: '12px',
-              fontWeight: '700',
-              textDecoration: 'none',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            <ExternalLink size={13} /> Stockbit
-          </a>
-
           <button
             onClick={() => fetchTickerAnalysis(ticker, mode)}
             disabled={isLoading}

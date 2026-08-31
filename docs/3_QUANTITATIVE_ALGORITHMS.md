@@ -59,134 +59,51 @@ $$\text{SL} = \min\left(\text{Entry} \times 0.97, \max\left(\text{RawSL}, \text{
 
 *Hasil: Risiko per trade selalu terkunci secara ketat di antara **3.0% hingga 8.0%**.*
 
----
+### B. Dual-Target Execution & Breakeven Lock
+1. **Target 1 ($\text{TP}_1$)**: $\text{Entry} + 1.5 \times (\text{Entry} - \text{SL})$
+   - Saat $\text{TP}_1$ tersentuh, 50% porsi posisi dilikuidasi untuk mengamankan profit.
+   - Level Stop Loss untuk sisa porsi 50% otomatis digeser ke *Breakeven (+0.5%)* untuk menghilangkan risiko kerugian.
+2. **Target 2 ($\text{TP}_2$)**: $\text{Entry} + 2.5 \times (\text{Entry} - \text{SL})$
+   - Sebagai target *runner* untuk memaksimalkan keuntungan pada tren besar.
 
-### B. Eksekusi Dual-Target (1.5R & 2.5R Multi-Tier Profit Taking)
-$$\text{PriceRisk} = \text{Entry} - \text{SL}$$
-$$\text{TP1} = \text{Entry} + (1.5 \times \text{PriceRisk})$$
-$$\text{TP2} = \text{Entry} + (2.5 \times \text{PriceRisk})$$
+### C. Alokasi Lot Bulat Saham BEI (IDX 100-Shares Lot Math)
+Untuk menjamin tidak ada kesalahan pecahan lot dalam eksekusi pasar nyata di Bursa Efek Indonesia:
 
-- **Kondisi 1**: Saat harga mencapai $\text{High} \ge \text{TP1}$, ambil untung 50% porsi dan **pindahkan Stop Loss ke $\text{Entry} \times 1.005$ (Breakeven +0.5%)**.
-- **Kondisi 2**: Posisi *runner* (50% tersisa) dibiarkan berjalan hingga menyentuh $\text{TP2}$ atau keluar saat terjadi pembalikan tren Supertrend (*Chandelier Exit*).
+$$\text{RiskPerShare} = \text{Entry} - \text{SL}$$
 
----
+$$\text{MaxLossNominal} = \text{ModalPortofolio} \times \text{MaxRiskPct}$$
 
-### C. Formula Alokasi Lot Bursa Efek Indonesia (IDX Lot Sizing)
-Di BEI, 1 Lot setara dengan 100 lembar saham. Alokasi lot dihitung dengan pembulatan ke bawah ketat (`math.floor`):
+$$\text{Lots} = \left\lfloor \frac{\text{MaxLossNominal}}{\text{RiskPerShare} \times 100} \right\rfloor$$
 
-$$\text{RiskBudget} = \text{AccountSize} \times \left(\frac{\text{RiskPerTradePct}}{100}\right)$$
-$$\text{RawShares} = \left\lfloor \frac{\text{RiskBudget}}{\text{PriceRisk}} \right\rfloor$$
-$$\text{RecommendedLots} = \left\lfloor \frac{\text{RawShares}}{100} \right\rfloor$$
-$$\text{AllocatedCapital} = \text{RecommendedLots} \times 100 \times \text{EntryPrice}$$
+$$\text{Shares} = \text{Lots} \times 100$$
 
----
-
-## 5. Algoritma Smart Money Concepts (SMC Engine)
-
-### A. Fair Value Gap (FVG)
-Dideteksi pada pola 3-bar berurutan:
-- **Bullish FVG**: Terjadi saat $\text{Low}_{\text{bar 3}} > \text{High}_{\text{bar 1}}$ dengan $\text{Area FVG} = [\text{High}_{\text{bar 1}}, \text{Low}_{\text{bar 3}}]$.
-- **Mitigasi**: FVG dianggap *Mitigated / Inactive* saat harga di bar selanjutnya menembus area FVG ke bawah.
-
-### B. Order Block (OB)
-- **Bullish Order Block**: Candle *bearish* (merah) terakhir sebelum terjadi gelombang impulsif hijau yang menembus *swing high* sebelumnya (*Break of Structure*). $\text{Area OB} = [\text{Low}_{\text{candle merah}}, \text{High}_{\text{candle merah}}]$.
-
-### C. Break of Structure (BOS) & Change of Character (CHOCH)
-- **BOS**: Penutupan harga (`Close`) menembus *Swing High* sebelumnya dalam arah tren utama.
-- **CHOCH**: Penutupan harga menembus *Swing Low* terdekat saat tren naik (indikasi awal pembalikan tren).
+$$\text{TotalInvestasi} = \text{Shares} \times \text{Entry}$$
 
 ---
 
-## 6. Model Forensik Laba & Kualitas Keuangan
+## 5. Mesin Waktu Eksekusi 1-Jam Intraday (1H Intraday Entry Timing Engine)
 
-### A. Piotroski 9-Point F-Score
-Mengukur kekuatan finansial fundamental dengan skor diskrit 0 hingga 9:
-
-$$\text{F\_Score} = \sum_{k=1}^{9} F_k$$
-
-1. **Profitabilitas (4 Poin)**:
-   - $F_1 = 1$ jika $\text{ROA} > 0$
-   - $F_2 = 1$ jika $\text{CFO} > 0$
-   - $F_3 = 1$ jika $\Delta\text{ROA} > 0$ (ROA tahun ini > ROA tahun lalu)
-   - $F_4 = 1$ jika $\text{CFO} > \text{Net Income}$ (Kualitas akrual sehat)
-2. **Leverage & Likuiditas (3 Poin)**:
-   - $F_5 = 1$ jika $\Delta\text{Long-Term Debt} \le 0$ (Utang jangka panjang tidak membengkak)
-   - $F_6 = 1$ jika $\Delta\text{Current Ratio} > 0$ (Likuiditas lancar membaik)
-   - $F_7 = 1$ jika Tidak ada penerbitan saham baru / dilusi ekuitas
-3. **Efisiensi Operasional (2 Poin)**:
-   - $F_8 = 1$ jika $\Delta\text{Gross Margin} > 0$
-   - $F_9 = 1$ jika $\Delta\text{Asset Turnover} > 0$
-
-*Interpretasi: `8-9 (Sangat Sehat / Pristine)`, `5-7 (Stabil / Wajar)`, `0-4 (Risiko Finansial Tinggi)`.*
+Sinyal Daily di-breakdown ke grafik 1-Jam untuk menemukan jam eksekusi bursa terbaik:
+1. **Area Entry 1H**:
+   $$\text{ZoneLow} = \min(\text{EMA}_{9,\text{H1}}, \text{EMA}_{21,\text{H1}})$$
+   $$\text{ZoneHigh} = \max(\text{EMA}_{9,\text{H1}}, \text{EMA}_{21,\text{H1}})$$
+2. **Status Konfirmasi Entry**:
+   - Jika $\text{CurrentPrice} \le \text{ZoneHigh} \times 1.01 \land \text{CurrentPrice} \ge \text{ZoneLow} \times 0.99$: **`ENTRY NOW`** (Harga berada tepat di area akumulasi).
+   - Jika $\text{CurrentPrice} > \text{ZoneHigh} \times 1.01$: **`WAIT FOR PULLBACK`** (Harga sudah agak tinggi, tunggu retest).
 
 ---
 
-### B. Beneish 8-Variable M-Score (Deteksi Manipulasi Laba)
-$$\text{M-Score} = -4.84 + 0.920 \cdot \text{DSRI} + 0.528 \cdot \text{GMI} + 0.404 \cdot \text{AQI} + 0.892 \cdot \text{SGI} + 0.115 \cdot \text{DEPI} - 0.172 \cdot \text{SGAI} + 4.037 \cdot \text{TATA} + 0.0327 \cdot \text{LVGI}$$
+## 6. Forensik Laba & Fundamental Kuantitatif
 
-Di mana:
-- $\text{DSRI} = \frac{\text{Receivables}_t / \text{Sales}_t}{\text{Receivables}_{t-1} / \text{Sales}_{t-1}}$ (Days Sales in Receivables Index)
-- $\text{GMI} = \frac{\text{Gross Margin}_{t-1}}{\text{Gross Margin}_t}$ (Gross Margin Index)
-- $\text{AQI} = \frac{1 - (\text{Current Assets}_t + \text{PP\&E}_t + \text{Securities}_t)/\text{Total Assets}_t}{1 - (\text{Current Assets}_{t-1} + \text{PP\&E}_{t-1} + \text{Securities}_{t-1})/\text{Total Assets}_{t-1}}$ (Asset Quality Index)
-- $\text{SGI} = \frac{\text{Sales}_t}{\text{Sales}_{t-1}}$ (Sales Growth Index)
-- $\text{DEPI} = \frac{\text{Depr Rate}_{t-1}}{\text{Depr Rate}_t}$ (Depreciation Index)
-- $\text{SGAI} = \frac{\text{SG\&A}_t / \text{Sales}_t}{\text{SG\&A}_{t-1} / \text{Sales}_{t-1}}$ (Sales, General & Admin Expense Index)
-- $\text{TATA} = \frac{\text{Net Income}_t - \text{CFO}_t}{\text{Total Assets}_t}$ (Total Accruals to Total Assets)
-- $\text{LVGI} = \frac{\text{Total Long-Term Debt}_t / \text{Total Assets}_t}{\text{Total Long-Term Debt}_{t-1} / \text{Total Assets}_{t-1}}$ (Leverage Index)
+### A. 9-Kriteria Piotroski F-Score (Kualitas Fundamental)
+Menilai profitabilitas, leverage, likuiditas, dan efisiensi operasional emiten (Skor 0-9):
+- **Skor 8 - 9**: Fundamental Istimewa (*High Quality / Safe Value*).
+- **Skor 5 - 7**: Fundamental Stabil / Moderat.
+- **Skor 0 - 4**: Risiko Kerapuhan Finansial (*Financial Distress Risk*).
 
-> **Ambang Batas Manipulasi**:
-> - Jika $\text{M-Score} > -1.78 \implies$ **High Probability of Earnings Manipulation (Bahaya)**.
-> - Jika $\text{M-Score} \le -1.78 \implies$ **Low Probability of Manipulation (Laporan Keuangan Wajar)**.
+### B. 8-Rasio Beneish M-Score (Deteksi Manipulasi Laporan Keuangan)
+Mendeteksi anomali laba akrual dan manipulasi pendapatan:
+$$M = -4.84 + 0.920 \cdot \text{DSRI} + 0.528 \cdot \text{GMI} + 0.404 \cdot \text{AQI} + 0.892 \cdot \text{SGI} + 0.115 \cdot \text{DEPI} - 0.172 \cdot \text{SGAI} + 4.037 \cdot \text{TATA} + 0.0327 \cdot \text{LVGI}$$
 
----
-
-### C. DuPont 3-Way ROE Decomposition
-$$\text{ROE} = \underbrace{\left(\frac{\text{Net Income}}{\text{Revenue}}\right)}_{\text{Net Profit Margin}} \times \underbrace{\left(\frac{\text{Revenue}}{\text{Total Assets}}\right)}_{\text{Asset Turnover}} \times \underbrace{\left(\frac{\text{Total Assets}}{\text{Equity}}\right)}_{\text{Financial Leverage Multiplier}}$$
-
----
-
-## 7. Model Valuasi Fundamental Multi-Dimensi
-
-### A. Benjamin Graham Number
-$$\text{GrahamNumber} = \sqrt{22.5 \times \text{EPS} \times \text{BVPS}}$$
-
-### B. Peter Lynch Fair Value Model
-$$\text{LynchFairValue} = \text{EPS} \times \min(25.0, \max(5.0, \text{RevenueCAGR}_{3\text{y}}))$$
-
-### C. Discounted Cash Flow (DCF - 2 Stage Model)
-$$\text{DCF} = \sum_{t=1}^{5} \frac{\text{FCF}_0 \times (1 + g)^t}{(1 + r)^t} + \frac{\text{TerminalValue}}{(1 + r)^5}$$
-Dengan $r = 10\% - 12\%$ dan $g_{\text{terminal}} = 3.0\%$.
-
----
-
-## 8. Formula Level Pivot Dinamis (Dynamic Pivot Levels)
-
-Dihitung berdasarkan bar Harian sebelumnya ($\text{High}_H, \text{Low}_L, \text{Close}_C, \text{Open}_O$):
-
-### A. Classic Floor Pivot
-$$\text{Pivot } P = \frac{H + L + C}{3}$$
-$$R_1 = (2 \times P) - L, \quad S_1 = (2 \times P) - H$$
-$$R_2 = P + (H - L), \quad S_2 = P - (H - L)$$
-
-### B. Fibonacci Pivot Levels
-$$R_3 = P + 1.000 \times (H - L), \quad S_3 = P - 1.000 \times (H - L)$$
-$$R_2 = P + 0.618 \times (H - L), \quad S_2 = P - 0.618 \times (H - L)$$
-$$R_1 = P + 0.382 \times (H - L), \quad S_1 = P - 0.382 \times (H - L)$$
-
-### C. Camarilla Equation Levels
-$$R_4 = C + 1.1 \times \frac{H - L}{2}, \quad S_4 = C - 1.1 \times \frac{H - L}{2}$$
-$$R_3 = C + 1.1 \times \frac{H - L}{4}, \quad S_3 = C - 1.1 \times \frac{H - L}{4}$$
-
----
-
-## 9. Kalkulasi Floating PnL & Trailing SL Personal
-
-Bila pengguna memasukkan harga modal beli rata-rata ($\text{AvgPrice}$):
-
-$$\text{Floating PnL \%} = \left(\frac{\text{LastPrice} - \text{AvgPrice}}{\text{AvgPrice}}\right) \times 100\%$$
-
-$$\text{Trailing SL (Profit Lock)} = \begin{cases} 
-\max(\text{AvgPrice} \times 1.01, \text{Low}_{3\text{d}}), & \text{jika Floating PnL } \ge +5.0\% \\
-\text{AvgPrice} \times 1.005 \text{ (BEP)}, & \text{jika Floating PnL } \in [2.0\%, 5.0\%) \\
-\text{Standard RELT SL}, & \text{jika Floating PnL } < 2.0\%
-\end{cases}$$
+- Jika $M < -1.78$: **`UNLIKELY MANIPULATOR`** (Laba bersih wajar dan kredibel).
+- Jika $M \ge -1.78$: **`POTENTIAL MANIPULATOR`** (Waspada anomali akrual agresif).

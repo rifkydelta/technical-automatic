@@ -463,15 +463,11 @@ export default function CategoryPresetHub({ onTickerClick, mode = 'live' }) {
 
       {/* Main Stock Table or Cards Grid */}
       {isLoading ? (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: '20px'
-        }}>
-          {[1, 2, 3, 4, 5, 6].map((idx) => (
-            <SkeletonCard key={idx} />
-          ))}
-        </div>
+        viewMode === 'table' ? (
+          <SkeletonTableView />
+        ) : (
+          <SkeletonCardGrid />
+        )
       ) : errorMessage ? (
         <div className="card text-bearish font-mono" style={{ border: '1px solid var(--bearish)', padding: '20px' }}>
           Gagal memuat data: {errorMessage}
@@ -753,42 +749,170 @@ export default function CategoryPresetHub({ onTickerClick, mode = 'live' }) {
   );
 }
 
-function SkeletonCard() {
+function SkeletonTableView() {
   return (
-    <div 
+    <div style={{ overflowX: 'auto', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+      <table
+        className="signal-table"
+        style={{
+          width: '100%',
+          borderCollapse: 'separate',
+          borderSpacing: '0',
+          fontSize: '13px',
+          background: 'rgba(10, 12, 16, 0.6)'
+        }}
+      >
+        <thead>
+          <tr
+            style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              color: 'var(--text-secondary)',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+              textAlign: 'left'
+            }}
+          >
+            <th style={{ padding: '14px 16px' }}>Emiten</th>
+            <th style={{ padding: '14px 16px' }}>Harga Sekarang</th>
+            <th style={{ padding: '14px 16px' }}>Change %</th>
+            <th style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Target size={13} color="var(--bullish)" /> Target TP1
+              </div>
+            </th>
+            <th style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Calendar size={13} color="#60a5fa" /> Estimasi ke TP
+              </div>
+            </th>
+            <th style={{ padding: '14px 16px' }}>Trend</th>
+            <th style={{ padding: '14px 16px' }}>Score</th>
+            <th style={{ padding: '14px 16px' }}>Rekomendasi</th>
+            <th style={{ padding: '14px 16px', textAlign: 'center' }}>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[1, 2, 3, 4, 5, 6].map((idx) => (
+            <tr
+              key={idx}
+              style={{
+                borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                background: idx % 2 === 0 ? 'rgba(255, 255, 255, 0.01)' : 'transparent',
+              }}
+            >
+              {/* 1. Ticker & Name */}
+              <td style={{ padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div className="skeleton skeleton-badge" style={{ width: '56px', height: '24px' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div className="skeleton skeleton-text" style={{ width: '90px', height: '12px' }} />
+                    <div className="skeleton skeleton-text" style={{ width: '60px', height: '10px' }} />
+                  </div>
+                </div>
+              </td>
+
+              {/* 2. Price */}
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-text" style={{ width: '70px', height: '14px' }} />
+              </td>
+
+              {/* 3. Change % */}
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-badge" style={{ width: '64px', height: '22px' }} />
+              </td>
+
+              {/* 4. Target TP1 */}
+              <td style={{ padding: '14px 16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div className="skeleton skeleton-text" style={{ width: '65px', height: '13px' }} />
+                  <div className="skeleton skeleton-text" style={{ width: '45px', height: '10px' }} />
+                </div>
+              </td>
+
+              {/* 5. Estimasi ke TP */}
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-badge" style={{ width: '75px', height: '20px' }} />
+              </td>
+
+              {/* 6. Trend */}
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-badge" style={{ width: '60px', height: '20px' }} />
+              </td>
+
+              {/* 7. Score */}
+              <td style={{ padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="skeleton skeleton-avatar" style={{ width: '28px', height: '28px' }} />
+                  <div className="skeleton skeleton-text" style={{ width: '24px', height: '12px' }} />
+                </div>
+              </td>
+
+              {/* 8. Rekomendasi */}
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-badge" style={{ width: '85px', height: '22px' }} />
+              </td>
+
+              {/* 9. Action Button */}
+              <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                <div className="skeleton skeleton-button" style={{ width: '65px', height: '28px', margin: '0 auto' }} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SkeletonCardGrid() {
+  return (
+    <div
       style={{
-        backgroundColor: 'rgba(255, 255, 255, 0.02)',
-        border: '1px solid rgba(255, 255, 255, 0.05)',
-        borderRadius: '16px',
-        padding: '20px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '16px'
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+        gap: '20px'
       }}
     >
-      {/* Top Section */}
-      <div className="flex-row items-center justify-between">
-        <div className="flex-col gap-xs">
-          <div className="skeleton" style={{ width: '80px', height: '24px', borderRadius: '6px' }}></div>
-          <div className="skeleton" style={{ width: '120px', height: '12px', borderRadius: '4px' }}></div>
-        </div>
-        <div className="flex-col items-end gap-xs">
-          <div className="skeleton" style={{ width: '90px', height: '22px', borderRadius: '6px' }}></div>
-          <div className="skeleton" style={{ width: '50px', height: '14px', borderRadius: '4px' }}></div>
-        </div>
-      </div>
+      {[1, 2, 3, 4, 5, 6].map((idx) => (
+        <div
+          key={idx}
+          style={{
+            backgroundColor: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            borderRadius: '16px',
+            padding: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px'
+          }}
+        >
+          {/* Top Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div className="skeleton skeleton-badge" style={{ width: '75px', height: '24px' }} />
+              <div className="skeleton skeleton-text" style={{ width: '130px', height: '12px' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+              <div className="skeleton skeleton-text" style={{ width: '80px', height: '20px' }} />
+              <div className="skeleton skeleton-badge" style={{ width: '55px', height: '18px' }} />
+            </div>
+          </div>
 
-      {/* Middle Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '4px' }}>
-        <div className="skeleton" style={{ height: '48px', borderRadius: '10px' }}></div>
-        <div className="skeleton" style={{ height: '48px', borderRadius: '10px' }}></div>
-      </div>
+          {/* Metric Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '2px' }}>
+            <div className="skeleton" style={{ height: '52px', borderRadius: '10px' }} />
+            <div className="skeleton" style={{ height: '52px', borderRadius: '10px' }} />
+          </div>
 
-      {/* Bottom Section */}
-      <div className="flex-row items-center justify-between" style={{ paddingTop: '10px', borderTop: '1px dashed rgba(255,255,255,0.05)' }}>
-        <div className="skeleton" style={{ width: '130px', height: '22px', borderRadius: '6px' }}></div>
-        <div className="skeleton" style={{ width: '60px', height: '22px', borderRadius: '6px' }}></div>
-      </div>
+          {/* Forecast / Risk Ray */}
+          <div className="skeleton" style={{ height: '36px', borderRadius: '8px' }} />
+
+          {/* Bottom Action Footer */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+            <div className="skeleton skeleton-badge" style={{ width: '100px', height: '24px' }} />
+            <div className="skeleton skeleton-button" style={{ width: '70px', height: '26px' }} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

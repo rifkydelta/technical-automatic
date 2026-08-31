@@ -21,9 +21,64 @@ export default function DashboardScreener({ results, onTickerClick, isLoading })
 
   if (isLoading) {
     return (
-      <div className="flex-col items-center justify-center" style={{ padding: '60px 0', gap: '16px' }}>
-        <div className="live-dot" style={{ width: '12px', height: '12px' }}></div>
-        <span className="text-secondary font-mono tracking-widest uppercase">Scanning Market...</span>
+      <div style={{ marginTop: '32px' }}>
+        {/* Header with View Toggle */}
+        <div className="flex-row items-center gap-sm" style={{ marginBottom: '20px', flexWrap: 'wrap' }}>
+          <h2 className="text-xl font-bold font-mono tracking-wider">MARKET SCREENER</h2>
+          <div style={{ height: '1px', flex: 1, backgroundColor: 'rgba(255,255,255,0.1)' }}></div>
+          <span className="text-xs text-secondary font-mono">SCANNING MARKET...</span>
+
+          {/* View Mode Toggle Buttons */}
+          <div
+            style={{
+              display: 'flex',
+              background: 'rgba(255, 255, 255, 0.05)',
+              padding: '3px',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              gap: '4px'
+            }}
+          >
+            <button
+              onClick={() => setViewMode('table')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                fontWeight: viewMode === 'table' ? '700' : '400',
+                background: viewMode === 'table' ? 'rgba(59, 130, 246, 0.25)' : 'transparent',
+                color: viewMode === 'table' ? '#60a5fa' : 'var(--text-muted)'
+              }}
+            >
+              <TableIcon size={14} /> Tabel Screener
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                fontWeight: viewMode === 'grid' ? '700' : '400',
+                background: viewMode === 'grid' ? 'rgba(59, 130, 246, 0.25)' : 'transparent',
+                color: viewMode === 'grid' ? '#60a5fa' : 'var(--text-muted)'
+              }}
+            >
+              <LayoutGrid size={14} /> Card Grid
+            </button>
+          </div>
+        </div>
+
+        {viewMode === 'table' ? <ScreenerTableSkeleton /> : <ScreenerGridSkeleton />}
       </div>
     );
   }
@@ -199,50 +254,73 @@ export default function DashboardScreener({ results, onTickerClick, isLoading })
                       <div style={{ fontFamily: 'monospace', fontWeight: '700', color: 'var(--bullish)', fontSize: '13px' }}>
                         Rp{formatIDR(tp1Val)}
                       </div>
-                      <div style={{ fontSize: '11px', color: 'var(--bullish)', opacity: 0.85 }}>
-                        +{tp1Pct}% Upside
+                      <div style={{ fontSize: '10px', color: 'var(--bullish)', fontWeight: '600' }}>
+                        +{tp1Pct}%
                       </div>
                     </td>
 
-                    {/* Estimasi Sampai TP */}
+                    {/* Estimasi ke TP */}
                     <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
                       <div
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '6px',
-                          padding: '3px 10px',
+                          gap: '4px',
+                          padding: '3px 8px',
                           borderRadius: '6px',
                           background: 'rgba(96, 165, 250, 0.1)',
-                          border: '1px solid rgba(96, 165, 250, 0.25)',
+                          border: '1px solid rgba(96, 165, 250, 0.2)',
                           color: '#60a5fa',
-                          fontWeight: '700',
-                          fontSize: '11px'
+                          fontSize: '11px',
+                          fontWeight: '600'
                         }}
                       >
-                        <Calendar size={12} /> {estDays}
+                        <Calendar size={11} /> {estDays}
                       </div>
                     </td>
 
                     {/* Trend */}
                     <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
-                      <span
+                      <div
                         style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          background: isUptrend ? 'rgba(74, 222, 128, 0.1)' : 'rgba(244, 63, 94, 0.1)',
+                          border: `1px solid ${isUptrend ? 'rgba(74, 222, 128, 0.2)' : 'rgba(244, 63, 94, 0.2)'}`,
+                          color: isUptrend ? 'var(--bullish)' : 'var(--bearish)',
                           fontSize: '11px',
-                          fontWeight: '600',
-                          color: isUptrend ? 'var(--bullish)' : 'var(--warning)'
+                          fontWeight: '600'
                         }}
                       >
+                        {isUptrend ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                         {item.trend}
-                      </span>
+                      </div>
                     </td>
 
                     {/* Score */}
                     <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontWeight: '700', color: 'var(--text-primary)', fontSize: '12px' }}>
-                          {item.score_display || `${item.score}%`}
-                        </span>
+                        <div
+                          style={{
+                            width: '26px',
+                            height: '26px',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '11px',
+                            fontWeight: '800',
+                            fontFamily: 'monospace',
+                            background: item.relt_score >= 70 ? 'rgba(74, 222, 128, 0.2)' : item.relt_score >= 50 ? 'rgba(251, 191, 36, 0.2)' : 'rgba(244, 63, 94, 0.2)',
+                            color: item.relt_score >= 70 ? 'var(--bullish)' : item.relt_score >= 50 ? 'var(--neutral)' : 'var(--bearish)',
+                            border: `1px solid ${item.relt_score >= 70 ? 'var(--bullish)' : item.relt_score >= 50 ? 'var(--neutral)' : 'var(--bearish)'}`
+                          }}
+                        >
+                          {item.relt_score || item.score || 0}
+                        </div>
                       </div>
                     </td>
 
@@ -348,6 +426,135 @@ export default function DashboardScreener({ results, onTickerClick, isLoading })
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function ScreenerTableSkeleton() {
+  return (
+    <div style={{ overflowX: 'auto', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+      <table
+        className="signal-table"
+        style={{
+          width: '100%',
+          borderCollapse: 'separate',
+          borderSpacing: '0',
+          fontSize: '13px',
+          background: 'rgba(10, 12, 16, 0.6)'
+        }}
+      >
+        <thead>
+          <tr
+            style={{
+              background: 'rgba(255, 255, 255, 0.03)',
+              color: 'var(--text-secondary)',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+              textAlign: 'left'
+            }}
+          >
+            <th style={{ padding: '14px 16px' }}>Emiten</th>
+            <th style={{ padding: '14px 16px' }}>Harga Sekarang</th>
+            <th style={{ padding: '14px 16px' }}>Change %</th>
+            <th style={{ padding: '14px 16px' }}>Target TP1</th>
+            <th style={{ padding: '14px 16px' }}>Estimasi ke TP</th>
+            <th style={{ padding: '14px 16px' }}>Trend</th>
+            <th style={{ padding: '14px 16px' }}>Score</th>
+            <th style={{ padding: '14px 16px' }}>Rekomendasi</th>
+            <th style={{ padding: '14px 16px' }}>Volume</th>
+            <th style={{ padding: '14px 16px', textAlign: 'center' }}>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[1, 2, 3, 4, 5, 6].map((idx) => (
+            <tr
+              key={idx}
+              style={{
+                borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                background: idx % 2 === 0 ? 'rgba(255, 255, 255, 0.01)' : 'transparent',
+              }}
+            >
+              <td style={{ padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="skeleton skeleton-badge" style={{ width: '56px', height: '24px' }} />
+                  <div className="skeleton skeleton-text" style={{ width: '100px', height: '12px' }} />
+                </div>
+              </td>
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-text" style={{ width: '70px', height: '14px' }} />
+              </td>
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-badge" style={{ width: '64px', height: '22px' }} />
+              </td>
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-text" style={{ width: '65px', height: '14px' }} />
+              </td>
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-badge" style={{ width: '75px', height: '20px' }} />
+              </td>
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-badge" style={{ width: '60px', height: '20px' }} />
+              </td>
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-avatar" style={{ width: '26px', height: '26px' }} />
+              </td>
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-badge" style={{ width: '85px', height: '22px' }} />
+              </td>
+              <td style={{ padding: '14px 16px' }}>
+                <div className="skeleton skeleton-text" style={{ width: '55px', height: '13px' }} />
+              </td>
+              <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                <div className="skeleton skeleton-button" style={{ width: '65px', height: '26px', margin: '0 auto' }} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ScreenerGridSkeleton() {
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+      gap: '24px'
+    }}>
+      {[1, 2, 3, 4, 5, 6].map((idx) => (
+        <div
+          key={idx}
+          style={{
+            backgroundColor: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            borderRadius: '20px',
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div className="skeleton skeleton-badge" style={{ width: '75px', height: '26px' }} />
+              <div className="skeleton skeleton-text" style={{ width: '140px', height: '12px' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+              <div className="skeleton skeleton-text" style={{ width: '85px', height: '22px' }} />
+              <div className="skeleton skeleton-badge" style={{ width: '60px', height: '18px' }} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="skeleton" style={{ height: '54px', borderRadius: '12px' }} />
+            <div className="skeleton" style={{ height: '54px', borderRadius: '12px' }} />
+          </div>
+          <div className="skeleton" style={{ height: '40px', borderRadius: '10px' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+            <div className="skeleton skeleton-badge" style={{ width: '100px', height: '24px' }} />
+            <div className="skeleton skeleton-button" style={{ width: '80px', height: '28px' }} />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

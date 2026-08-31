@@ -128,11 +128,11 @@ class SignalRepository:
             if status and status.upper() != "ALL":
                 st = status.upper()
                 if st == "HIT_TP":
-                    query += " AND status IN ('HIT_TP1', 'HIT_TP2')"
+                    query += " AND (status IN ('HIT_TP1', 'HIT_TP2') OR (status = 'CLOSED' AND actual_pnl_pct > 0))"
                 elif st == "OPEN":
                     query += " AND status = 'OPEN'"
                 elif st == "HIT_SL":
-                    query += " AND status = 'HIT_SL'"
+                    query += " AND (status = 'HIT_SL' OR (status = 'CLOSED' AND actual_pnl_pct < 0))"
                 elif st == "CLOSED":
                     query += " AND status IN ('CLOSED', 'HIT_TP1', 'HIT_TP2', 'HIT_SL')"
                 else:
@@ -172,15 +172,25 @@ class SignalRepository:
     def _get_stats_sync(self) -> Dict[str, Any]:
         with self._get_connection() as conn:
             cursor = conn.execute("""
+                WITH LatestPerTicker AS (
+                    SELECT s.*, ROW_NUMBER() OVER (PARTITION BY s.ticker ORDER BY s.id DESC) as rn
+                    FROM signals s
+                )
                 SELECT
-                    COUNT(*) as total_signals,
-                    SUM(CASE WHEN signal_type = 'BUY' THEN 1 ELSE 0 END) as buy_count,
-                    SUM(CASE WHEN signal_type = 'SELL' THEN 1 ELSE 0 END) as sell_count,
-                    AVG(backtest_winrate) as avg_winrate,
-                    AVG(projected_pnl_pct) as avg_proj_pnl
-                FROM signals
+                    (SELECT COUNT(DISTINCT ticker) FROM signals) as total_emiten,
+                    (SELECT COUNT(*) FROM LatestPerTicker WHERE rn = 1 AND signal_type = 'BUY') as buy_count,
+                    (SELECT COUNT(*) FROM LatestPerTicker WHERE rn = 1 AND signal_type = 'SELL') as sell_count,
+                    (SELECT COUNT(*) FROM signals) as total_signals,
+                    (SELECT COUNT(*) FROM signals WHERE status = 'OPEN') as open_signals_count,
+                    (SELECT SUM(CASE WHEN status LIKE '%HIT_TP%' OR (status = 'CLOSED' AND actual_pnl_pct > 0) THEN 1 ELSE 0 END) FROM signals) as hit_tp_count,
+                    (SELECT SUM(CASE WHEN status = 'HIT_SL' OR (status = 'CLOSED' AND actual_pnl_pct < 0) THEN 1 ELSE 0 END) FROM signals) as hit_sl_count,
+                    (SELECT COUNT(*) FROM signals WHERE status IN ('CLOSED', 'HIT_TP1', 'HIT_TP2', 'HIT_SL')) as closed_count,
+                    (SELECT AVG(backtest_winrate) FROM signals WHERE backtest_winrate >= 50) as top_winrate,
+                    (SELECT AVG(backtest_winrate) FROM signals) as avg_winrate,
+                    (SELECT AVG(projected_pnl_pct) FROM signals WHERE projected_pnl_pct > 0) as avg_proj_pnl
             """)
-            stats = dict(cursor.fetchone())
+            row = cursor.fetchone()
+            stats = dict(row) if row else {}
 
             best_cursor = conn.execute("""
                 SELECT ticker, backtest_total_pnl, backtest_winrate
@@ -197,6 +207,105 @@ class SignalRepository:
 
             return stats
 
+    def _get_available_dates_sync(self, limit: int = 30) -> List[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            cursor = conn.execute("""
+                SELECT signal_date as date, COUNT(*) as count
+                FROM signals
+                WHERE signal_date IS NOT NULL AND signal_date != ''
+                GROUP BY signal_date
+                ORDER BY signal_date DESC
+                LIMIT ?
+            """, (limit,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def _get_paginated_signals_sync(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        signal_type: Optional[str] = None,
+        status: Optional[str] = None,
+        signal_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        min_score: Optional[int] = None,
+        search: Optional[str] = None
+    ) -> Dict[str, Any]:
+        with self._get_connection() as conn:
+            where_clauses = ["1=1"]
+            params = []
+
+            if signal_type and signal_type.upper() != "ALL":
+                where_clauses.append("signal_type = ?")
+                params.append(signal_type.upper())
+
+            if status and status.upper() != "ALL":
+                st = status.upper()
+                if st == "HIT_TP":
+                    where_clauses.append("(status IN ('HIT_TP1', 'HIT_TP2') OR (status = 'CLOSED' AND actual_pnl_pct > 0))")
+                elif st == "OPEN":
+                    where_clauses.append("status = 'OPEN'")
+                elif st == "HIT_SL":
+                    where_clauses.append("(status = 'HIT_SL' OR (status = 'CLOSED' AND actual_pnl_pct < 0))")
+                elif st == "CLOSED":
+                    where_clauses.append("status IN ('CLOSED', 'HIT_TP1', 'HIT_TP2', 'HIT_SL')")
+                else:
+                    where_clauses.append("status = ?")
+                    params.append(st)
+
+            if signal_date and signal_date.strip():
+                where_clauses.append("signal_date = ?")
+                params.append(signal_date.strip())
+
+            if start_date and start_date.strip():
+                where_clauses.append("signal_date >= ?")
+                params.append(start_date.strip())
+
+            if end_date and end_date.strip():
+                where_clauses.append("signal_date <= ?")
+                params.append(end_date.strip())
+
+            if min_score is not None and min_score > 0:
+                where_clauses.append("relt_score >= ?")
+                params.append(int(min_score))
+
+            if search and search.strip():
+                q = f"%{search.strip().upper()}%"
+                where_clauses.append("(ticker LIKE ? OR company_name LIKE ?)")
+                params.extend([q, q])
+
+            where_sql = " AND ".join(where_clauses)
+
+            # 1. Total matching records
+            count_cursor = conn.execute(f"SELECT COUNT(*) as total FROM signals WHERE {where_sql}", tuple(params))
+            total_items = count_cursor.fetchone()["total"]
+
+            # 2. Pagination calculation
+            safe_page_size = max(1, min(200, page_size))
+            total_pages = max(1, (total_items + safe_page_size - 1) // safe_page_size)
+            safe_page = max(1, min(page, total_pages)) if total_items > 0 else 1
+            offset = (safe_page - 1) * safe_page_size
+
+            # 3. Fetch paginated records
+            query = f"SELECT * FROM signals WHERE {where_sql} ORDER BY signal_date DESC, id DESC LIMIT ? OFFSET ?"
+            exec_params = list(params) + [safe_page_size, offset]
+            cursor = conn.execute(query, tuple(exec_params))
+            items = [dict(row) for row in cursor.fetchall()]
+
+            # 4. Fetch available date shortcuts
+            available_dates = self._get_available_dates_sync(limit=25)
+
+            return {
+                "items": items,
+                "total_items": total_items,
+                "total_pages": total_pages,
+                "current_page": safe_page,
+                "page_size": safe_page_size,
+                "has_next": safe_page < total_pages,
+                "has_prev": safe_page > 1,
+                "available_dates": available_dates
+            }
+
     # ── Asynchronous Public API ───────────────────────────────────────
 
     async def insert_signal(self, data: Dict[str, Any]) -> int:
@@ -211,6 +320,28 @@ class SignalRepository:
     ) -> List[Dict[str, Any]]:
         """Get the most recent signals from the database asynchronously."""
         return await asyncio.to_thread(self._get_latest_sync, limit, signal_type, status)
+
+    async def get_paginated_signals(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+        signal_type: Optional[str] = None,
+        status: Optional[str] = None,
+        signal_date: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        min_score: Optional[int] = None,
+        search: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Fetch signals with server-side pagination and rich date filtering asynchronously."""
+        return await asyncio.to_thread(
+            self._get_paginated_signals_sync,
+            page, page_size, signal_type, status, signal_date, start_date, end_date, min_score, search
+        )
+
+    async def get_available_dates(self, limit: int = 30) -> List[Dict[str, Any]]:
+        """Get distinct trading dates that have generated signals asynchronously."""
+        return await asyncio.to_thread(self._get_available_dates_sync, limit)
 
     async def get_signals_by_ticker(self, ticker: str, limit: int = 20) -> List[Dict[str, Any]]:
         """Get signal history for a specific ticker asynchronously."""

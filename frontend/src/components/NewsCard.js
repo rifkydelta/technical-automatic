@@ -30,15 +30,35 @@ export default function NewsCard({ newsData, isLoading, ticker }) {
 
       <div className="flex-col gap-sm">
         {isLoading ? (
-          // Skeleton loading state
-          Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} style={{ 
-              height: '42px', 
-              backgroundColor: 'rgba(255,255,255,0.03)', 
-              borderRadius: '8px',
-              animation: 'skeleton-pulse 2s infinite'
-            }} />
-          ))
+          // Responsive Grid Skeleton Loading
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div
+                key={i}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'flex-start',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(255, 255, 255, 0.05)',
+                  borderRadius: '10px',
+                  padding: '16px'
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                  <div className="skeleton skeleton-text" style={{ width: '90%', height: '14px' }} />
+                  <div className="skeleton skeleton-text" style={{ width: '60%', height: '14px' }} />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                    <div className="skeleton skeleton-text" style={{ width: '80px', height: '10px' }} />
+                    <div className="skeleton skeleton-text" style={{ width: '60px', height: '10px' }} />
+                  </div>
+                </div>
+                <div className="skeleton" style={{ width: '16px', height: '16px', borderRadius: '4px' }} />
+              </div>
+            ))}
+          </div>
         ) : newsData && newsData.length > 0 ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '12px' }}>
             {newsData.map((news, i) => (

@@ -1,28 +1,24 @@
-# 5. Frontend Design System & Charting Engine
+# 5. Frontend Design System & Institutional Aesthetics
 
-Dokumen ini mendokumentasikan filosofi estetika, token desain, arsitektur komponen React/Next.js, sistem tipografi, integrasi mesin grafik (*Lightweight Charts*), serta komponen antarmuka eksekutif **AI Analyst** pada **IDX Terminal**.
-
----
-
-## 1. Filosofi Desain: Liquid Glass / Dark Tech
-
-Platform mengadopsi bahasa visual **Institutional Dark Tech** yang mengutamakan:
-- **Tingkat Keterbacaan Finansial Tinggi (*High Contrast Readability*)**: Menggunakan font monospace tebal untuk angka nominal dan persentase sehingga data pasar mudah dicerna sekilas.
-- **Glassmorphism Halus (*Subtle Frosted Glass*)**: Panel latar belakang dengan `backdrop-filter: blur(16px)` dan `background: rgba(15, 23, 42, 0.88)` memberikan kedalaman visual modern tanpa memperlambat rendering browser.
-- **Color Coding Standar Finansial Pasar Modal**:
-  - 🟢 **Bullish / Buy / Profit**: Emerald Green (`#10b981` / `#4ade80` / `rgba(74, 222, 128, 0.15)`)
-  - 🔴 **Bearish / Sell / Loss**: Rose Red (`#f43f5e` / `rgba(244, 63, 94, 0.15)`)
-  - 🟡 **Neutral / Warning / Wait**: Amber Gold (`#fbbf24` / `rgba(251, 191, 36, 0.15)`)
-  - 🔵 **Info / Zone / Forecast**: Sky Blue (`#38bdf8` / `#60a5fa` / `rgba(56, 189, 248, 0.15)`)
-  - 🌐 **Stockbit Community**: Mint Emerald (`#34d399` / `rgba(16, 185, 129, 0.12)`)
+Dokumen ini mendokumentasikan filosofi estetika, token desain baku (*Design Tokens*), standarisasi *Anti-Slop*, sistem tipografi, komponen interaktif (*Liquid Glass*), tata letak responsif, serta arsitektur frontend pada **IDX Terminal**.
 
 ---
 
-## 2. Struktur Token CSS (`globals.css`)
+## 1. Filosofi Desain: Anti-Slop Institutional Dark Tech
 
+Platform mengadopsi standar desain profesional berbasis prinsip **`Leonxlnx/taste-skill`**:
+- **Bebas Pola Generik AI (*Anti-Slop*)**: Menghindari teks bergradasi pelangi acak (*rainbow gradient slop*), emoji berlebihan pada badge teknikal, dan jarak padding/margin kosong yang boros.
+- **Tipografi Solid & Tegas**: Menggunakan teks putih solid (`#ffffff`) dengan aksen warna fungsional terarah (`#38bdf8` untuk keyword, `#10b981` untuk bullish, `#f43f5e` untuk bearish).
+- **Glassmorphism Presisi (*Liquid Glass*)**: Panel dengan `backdrop-filter: blur(16px)` dan border transparan `rgba(255, 255, 255, 0.08)` yang responsif terhadap hover micro-interaction.
+
+---
+
+## 2. Token Baku CSS (`globals.css`)
+
+### A. Token Warna & Kedalaman
 ```css
 :root {
-  --bg-primary: #0a0c10;
+  --bg-primary: #050505;
   --bg-card: rgba(15, 17, 23, 0.85);
   --border-subtle: rgba(255, 255, 255, 0.08);
   --border-active: rgba(255, 255, 255, 0.18);
@@ -32,7 +28,7 @@ Platform mengadopsi bahasa visual **Institutional Dark Tech** yang mengutamakan:
   --bearish: #f43f5e;
   --bearish-bg: rgba(244, 63, 94, 0.12);
   --warning: #fbbf24;
-  --info: #60a5fa;
+  --info: #38bdf8;
   --stockbit: #34d399;
 
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -40,84 +36,92 @@ Platform mengadopsi bahasa visual **Institutional Dark Tech** yang mengutamakan:
 }
 ```
 
----
+### B. 4 Token Border-Radius Terstandarisasi
+Untuk menghindari inkonsistensi sudut visual, seluruh elemen antarmuka menggunakan 4 tingkatan radius baku:
 
-## 3. Arsitektur Komponen & Halaman (Next.js App Router)
-
-```
-frontend/src/
-├── app/
-│   ├── layout.js                 (Root Layout with Navbar, Market Time, Quick Search)
-│   ├── page.js                   (Home Portal: 2-Column Hero, IHSG Widget, Bento Cards, Preset Hub)
-│   ├── analysis/[ticker]/page.js (Deep-Dive Ticker Page with Sticky Sub-Tabs)
-│   ├── signals/page.js           (Live Signal Scanner Dashboard & Filtering)
-│   ├── screener/page.js          (Multi-Ticker Custom Screener)
-│   └── learning/page.js          (8 Educational Knowledge Modules)
-├── components/
-│   ├── Header.js                 (Price Header, Profile Drawer & Adaptive Stockbit Bridge)
-│   ├── TopCards.js               (Bento Grid: Setup Score, SMC Phase, Primary Trend, Break Level)
-│   ├── CandlestickChart.js       (TradingView Lightweight Charts Canvas with ResizeObserver)
-│   ├── FinancialCard.js          (4-Year Financial History, DCF, Graham Number, Valuation Tabs)
-│   ├── ai/
-│   │   ├── AiPromptModal.js      (3-Step Flow: Personas, Portfolio Avg Price, Dataset Badges, 5 Providers)
-│   │   ├── AiPasteModal.js       (Auto-Cleaner, 6 Schema Integrity Badges, 1-Click Clipboard & Demo Loader)
-│   │   ├── AiReportView.js       (Hero Verdict, Radial SVG Conviction Meter 0-100, Trailing SL, 5-Perspective Tabs)
-│   │   └── AiHistoryDrawer.js    (LocalStorage Historical Analysis Logs & Importer)
-│   └── CategoryPresetHub.js      (Market Presets: LQ45, High Dividend, BPJS, BSJP 15:30)
-└── utils/
-    ├── aiPromptGenerator.js      (Client-side Dynamic Prompt Builder & Sample Dataset)
-    └── formatters.js             (Indonesian Currency, Lot Sizing, & Percentage Math)
+```css
+:root {
+  --radius-sm: 10px;    /* Button filter kecil, badge status, pill preset */
+  --radius-md: 14px;    /* KPI stats cards, input search, dropdown filter */
+  --radius-lg: 20px;    /* Main containers, header banners, modal dialogs */
+  --radius-full: 9999px; /* Live status dot, circular icons, round badges */
+}
 ```
 
 ---
 
-## 4. Komponen Antarmuka AI Analyst (`src/components/ai/`)
+## 3. Utility Classes & Micro-Interactions
 
-### A. `AiPromptModal.js` (Generator Prompt Cerdas)
-- **Langkah 1**: Horizontal Segmented Pills untuk pemilihan persona analis dan form input modal beli (*Average Price*) dengan penghitung *Realtime Floating PnL*.
-- **Langkah 2**: 5 Chip ringkasan intelijen emiten (*Finansial 4-Tahun, 9-Poin Piotroski/Beneish, SMC Order Blocks, Pivot Levels, dan 15 Berita*).
-- **Langkah 3**: 5 Tombol 1-klik dengan logo bersih (*ChatGPT, Claude, DeepSeek, Google Gemini, Perplexity*) yang otomatis menyalin prompt dan membuka tab baru.
+### A. Liquid Glass Hover (`.liquid-glass-hover`)
+Memberikan umpan balik visual saat kartu di-hover tanpa menggeser tata letak:
+```css
+.liquid-glass-hover {
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.liquid-glass-hover:hover {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.liquid-glass-hover:active {
+  transform: translateY(0) scale(0.98);
+}
+```
 
-### B. `AiPasteModal.js` (Importer & Validator Skema)
-- **6 Badge Integritas Skema Real-Time**:
-  1. `Meta Data` (Ticker, Model, Analisis)
-  2. `Executive Verdict` (Conviction, Bias, Action, Thesis)
-  3. `5 Perspectives` (SMC, Bandarmologi, Kuantitatif, Valuasi, Eksekusi)
-  4. `Scenario Matrix` (Bullish, Bearish Invalidation, Sideways)
-  5. `Execution Blueprint` (Entry Zones, Stop Loss, Multi-Tier TP)
-  6. `Portfolio Context` (Status Modal, Trailing SL, Averaging Strategy)
-- **Aksi Cepat**: Tombol *Paste dari Clipboard* dan *Muat Contoh Demo*.
-
-### C. `AiReportView.js` (Dashboard Eksekutif Standar Institusi)
-- **Radial SVG Conviction Meter (0-100)**: Kalkulasi sudut rotasi dan keliling lingkaran dinamis:
-  $$\text{StrokeDashoffset} = C - \left(\frac{\text{Score}}{100} \times C\right), \quad C = 2\pi r$$
-- **Personalized Strategy Card**: Tampil jika ada data modal beli; menyajikan floating profit/loss, trailing stop, dan rencana averaging.
-- **5-Perspective Tabbed Explorer**: Segmented navigation untuk menjelajahi SMC, Order Flow, Kuantitatif, Valuasi, dan Eksekusi.
-- **Asymmetric Scenario Matrix**: 3 kartu probabilitas skenario pasar (Bullish, Bearish, Sideways).
+### B. Ambient Background Glow (`.glow-bg`)
+Pencahayaan radial halus di sudut latar belakang:
+```css
+.glow-bg {
+  position: fixed;
+  top: -10%;
+  right: -10%;
+  width: 50%;
+  height: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.06) 0%, transparent 70%);
+  z-index: -1;
+  pointer-events: none;
+}
+```
 
 ---
 
-## 5. Mesin Grafik: Lightweight Charts v4
+## 4. Pola Tata Letak Kunci (Key Layout Patterns)
 
-Komponen `CandlestickChart.js` memanfaatkan library **TradingView Lightweight Charts v4**:
+### A. Responsive 2-Column Split Hero (`.hero-grid`)
+Tata letak split screen yang menempatkan Headline + Omni-Search di sisi kiri dan 3D Radar Scanner di sisi kanan secara seimbang pada resolusi $\ge 860\text{px}$:
 
-```mermaid
-graph TD
-    A[Raw OHLCV DataFrame] --> B[Formatted Array: time, open, high, low, close, volume]
-    B --> C[Derivasi Indikator: Supertrend, EMA 9/21/50/200, Volume SMA]
-    B --> D[Derivasi Sinyal: Marker Panah Beli/Jual & Garis Target TP1/TP2/SL]
-    C --> E[Lightweight Charts Canvas]
-    D --> E
-    E --> F[Interactive HUD Legend on Crosshair Hover]
-    E --> G[ResizeObserver: Auto Fit-Content on Tab Switch & Window Resize]
+```css
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 28px;
+  align-items: center;
+}
+
+@media (min-width: 860px) {
+  .hero-grid {
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 32px;
+  }
+}
 ```
 
-### Fitur Utama Charting:
-1. **Multi-Timeframe Switching**: Berpindah instan antara grafik **Harian (1D)**, **1-Jam (1H)**, dan **15-Menit (15M)** tanpa reload.
-2. **Dynamic Overlay Layers**:
-   - Supertrend: Garis hijau tebal (*Bullish*) dan garis merah (*Bearish*).
-   - EMA Ribbon: EMA 9, EMA 21, EMA 50, EMA 200.
-   - SMC Areas: Kotak hijau transparan untuk *Bullish Fair Value Gap* dan kotak merah untuk *Bearish FVG*.
-   - Target Rays: Garis horizontal untuk Entry, Stop Loss, TP1 (1.5R), dan TP2 (2.5R).
-3. **Signal Markers**: Pin panah hijau bertuliskan harga beli dan pin merah saat TP/SL tersentuh.
-4. **`ResizeObserver`**: Memastikan canvas grafik selalu ter-render dengan lebar 100% sempurna saat berganti tab tanpa distorsi.
+### B. Clickable KPI Ribbon (4 Status Cards)
+Ribbon 4 kartu metrik pasar kuantitatif di homepage yang interaktif dan langsung mengarah ke rute terfilter:
+- **RADAR SCAN** $\rightarrow$ `/signals`
+- **BUY SIGNALS** $\rightarrow$ `/signals?type=BUY`
+- **WIN RATE AVG** $\rightarrow$ `/signals?minScore=75`
+- **TP TERCAPAI** $\rightarrow$ `/signals?status=HIT_TP`
+
+### C. Server-Side Pagination Bar
+Ditempatkan di bawah `SignalTable` dengan navigasi cerdas:
+- Indikator posisi data: `"Menampilkan 1-50 dari 2.860 sinyal"`.
+- Pilihan baris per halaman: `25 / 50 / 100 / 200`.
+- Kontrol halaman: `« Awal`, `‹ Prev`, angka halaman aktif `[1] [2] [3]`, `Next ›`, `Akhir »`.
+
+### D. Precision Calendar Datepicker
+Input tanggal kalender berformat ISO `YYYY-MM-DD` terintegrasi dengan shortcut sesi transaksi BEI teraktif.

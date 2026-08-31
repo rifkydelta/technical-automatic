@@ -77,26 +77,221 @@ Melakukan analisis kuantitatif dan teknikal mendalam pada 1 kode saham IDX (term
       "upside_pct": 9.27
     }
   },
-  "financials": [...],
+  "financials": [],
   "fair_value_analysis": {
     "consensus_fair_value": 11450.0,
     "overall_status": "Undervalued",
     "upside_potential_pct": 11.71,
-    "models": [...]
+    "models": []
   },
-  "detected_patterns": [...]
+  "detected_patterns": []
 }
 ```
 
 ---
 
-## 2. AI Prompt Intelligence Hub (`/api/ai-prompt/*`)
+## 2. Pemindai Sinyal & Radar Kuantitatif (`/api/signals/*`)
+
+### `POST /api/signals/scan`
+Menjalankan pemindaian sinyal kuantitatif realtime secara multi-threaded di latar belakang untuk seluruh emiten IDX (atau daftar ticker tertentu) dan menyinkronkan data ke SQLite WAL database.
+
+#### Request Body (Opsional)
+```json
+{
+  "tickers": ["BBCA", "BBRI", "BMRI", "VKTR", "AUTO", "DSSA", "PTBA", "TLKM"],
+  "max_workers": 6
+}
+```
+
+#### Response Body (200 OK)
+```json
+{
+  "scan_time": "31 Aug 2026 10:30 WIB",
+  "total_scanned": 8,
+  "signals_found": 8,
+  "signals": [
+    {
+      "id": 1,
+      "ticker": "VKTR",
+      "company_name": "VKTR Teknologi Mobilitas Tbk",
+      "signal_type": "BUY",
+      "signal_date": "2026-08-28",
+      "signal_time": "2026-08-28 15:00:00",
+      "relt_score": 85,
+      "relt_rating": "Grade A+",
+      "relt_action": "ULTRA BUY",
+      "entry_price": 965.0,
+      "stop_loss": 907.1,
+      "tp1": 1051.85,
+      "tp2": 1109.75,
+      "status": "OPEN",
+      "backtest_winrate": 68.5
+    }
+  ]
+}
+```
+
+---
+
+### `GET /api/signals/paginated`
+Mengambil data sinyal dengan sistem **Server-Side Pagination** dan filter multi-dimensi (tanggal, status, tipe sinyal, skor minimum, dan pencarian teks).
+
+#### Query Parameters
+- `page` *(int, default: `1`)*: Nomor halaman (1-indexed).
+- `page_size` *(int, default: `50`, max: `200`)*: Jumlah baris data per halaman.
+- `signal_type` *(string, optional)*: Filter tipe sinyal (`"BUY"`, `"SELL"`, atau `"ALL"`).
+- `status` *(string, optional)*: Filter siklus trade (`"OPEN"`, `"HIT_TP"`, `"HIT_SL"`, `"CLOSED"`, atau `"ALL"`).
+- `signal_date` *(string, optional)*: Filter tanggal spesifik dalam format ISO `YYYY-MM-DD` (misal: `"2026-08-28"`).
+- `start_date` / `end_date` *(string, optional)*: Filter rentang tanggal.
+- `min_score` *(int, optional, 0-100)*: Filter skor minimum RELT.
+- `search` *(string, optional)*: Filter pencarian kode emiten atau nama perusahaan.
+
+#### Response Body (200 OK)
+```json
+{
+  "items": [
+    {
+      "id": 2860,
+      "ticker": "BFIN",
+      "company_name": "BFI Finance Indonesia Tbk",
+      "signal_type": "BUY",
+      "signal_date": "2026-08-28",
+      "signal_time": "2026-08-28 15:00:00",
+      "backtest_winrate": 60.0,
+      "backtest_total_trades": 5,
+      "backtest_total_pnl": 12.4,
+      "relt_score": 70,
+      "relt_rating": "Grade A",
+      "relt_action": "WATCH BUY",
+      "entry_price": 920.0,
+      "stop_loss": 870.0,
+      "tp1": 995.0,
+      "tp2": 1045.0,
+      "minute_bar_open": 920.0,
+      "h1_entry_zone_low": 910.0,
+      "h1_entry_zone_high": 930.0,
+      "h1_entry_status": "ENTRY NOW",
+      "projected_pnl_pct": 8.15,
+      "direction": "UP",
+      "status": "OPEN",
+      "actual_exit_price": 0.0,
+      "actual_pnl_pct": 0.0
+    }
+  ],
+  "total_items": 2860,
+  "total_pages": 58,
+  "current_page": 1,
+  "page_size": 50,
+  "has_next": true,
+  "has_prev": false,
+  "available_dates": [
+    { "date": "2026-08-28", "count": 40 },
+    { "date": "2026-08-27", "count": 41 },
+    { "date": "2026-08-26", "count": 46 }
+  ]
+}
+```
+
+---
+
+### `GET /api/signals/dates`
+Mengambil daftar tanggal sesi transaksi BEI yang memiliki data sinyal tersimpan di database beserta frekuensi kemunculannya.
+
+#### Query Parameters
+- `limit` *(int, default: `30`)*: Batas jumlah tanggal terbaru yang dikembalikan.
+
+#### Response Body (200 OK)
+```json
+[
+  { "date": "2026-08-28", "count": 40 },
+  { "date": "2026-08-27", "count": 41 },
+  { "date": "2026-08-26", "count": 46 },
+  { "date": "2026-08-25", "count": 1 },
+  { "date": "2026-08-24", "count": 40 }
+]
+```
+
+---
+
+### `GET /api/signals/stats`
+Mengembalikan ringkasan statistik agregat pasar kuantitatif yang akurat dan real-time dari database.
+
+#### Response Body (200 OK)
+```json
+{
+  "total_signals": 2860,
+  "total_emiten": 171,
+  "buy_count": 171,
+  "sell_count": 0,
+  "hit_tp_count": 748,
+  "hit_sl_count": 1499,
+  "open_signals_count": 591,
+  "closed_count": 2269,
+  "avg_winrate": 56.9,
+  "top_winrate": 56.9,
+  "avg_proj_pnl": 40.52,
+  "best_performer": "MDIA",
+  "best_pnl": 153.21
+}
+```
+
+---
+
+### `GET /api/signals/latest`
+Mengambil daftar sinyal terbaru (legacy compatible endpoint).
+
+#### Query Parameters
+- `limit` *(int, default: `100`, max: `500`)*
+- `signal_type` *(string, optional)*
+- `status` *(string, optional)*
+
+---
+
+## 3. Stock Screener & Preset Hub (`/api/screener`)
+
+### `POST /api/screener`
+Memindai kumpulan kode emiten (preset kategori atau custom input) dan mengembalikan matriks analisis fundamental & teknikal multi-faktor.
+
+#### Request Body
+```json
+{
+  "tickers": ["BBCA", "BBRI", "BMRI", "BBNI"],
+  "mode": "live"
+}
+```
+
+#### Response Body (200 OK)
+```json
+{
+  "mode": "live",
+  "count": 4,
+  "data": [
+    {
+      "ticker": "BBCA",
+      "company_name": "Bank Central Asia Tbk",
+      "price": 10250,
+      "change_pct": 1.48,
+      "score": 85,
+      "action": "ULTRA BUY",
+      "pe_ratio": 22.4,
+      "pbv_ratio": 4.8,
+      "roe": 21.5,
+      "trend": "BULLISH",
+      "relt_status": "ENTRY NOW"
+    }
+  ]
+}
+```
+
+---
+
+## 4. AI Prompt Intelligence Hub (`/api/ai-prompt/*`)
 
 ### `GET /api/ai-prompt/generate/{ticker}`
-Mengekstrak 100% data intelijen pasar 360° (Finansial 4-tahun, 9-poin Piotroski, Beneish M-Score, Order Blocks, Pivot Fibonacci/Woodie/Camarilla, dan 15 berita) dan mengemasnya ke dalam master prompt siap salin untuk LLM.
+Mengekstrak data intelijen pasar 360° (Finansial 4-tahun, 9-poin Piotroski, Beneish M-Score, Order Blocks, Pivot Fibonacci/Woodie/Camarilla, dan 15 berita) dan mengemasnya ke dalam master prompt siap salin untuk LLM.
 
 #### Path & Query Parameters
-- `ticker` *(string, required)*: Kode saham (misal: `BBCA`, `JATI`).
+- `ticker` *(string, required)*: Kode saham (misal: `BBCA`).
 - `mode` *(string, optional, default: `"live"`)*: Mode pasar (`"live"` atau `"eod"`).
 - `persona` *(string, optional, default: `"Institutional Hedge Fund"`)*: Pilihan persona analisa (`"Institutional Hedge Fund"`, `"Swing & Momentum Trader"`, `"Deep Value & Quality Investor"`, `"Forensic Accounting & Short Auditor"`).
 - `user_avg_price` *(float, optional, default: `0`)*: Harga beli rata-rata pengguna untuk analisis portofolio personal.
@@ -119,176 +314,5 @@ Mengekstrak 100% data intelijen pasar 360° (Finansial 4-tahun, 9-poin Piotroski
     "news_count": 15,
     "order_blocks_count": 3
   }
-}
-```
-
----
-
-### `GET /api/ai-prompt/sample`
-Mengembalikan payload JSON contoh analisis lengkap standar institusi untuk keperluan demo dan pratinjau cepat dashboard tanpa harus menunggu respon eksternal LLM.
-
-#### Response Body (200 OK)
-```json
-{
-  "meta": {
-    "ticker": "BBCA",
-    "company_name": "Bank Central Asia Tbk",
-    "current_price": 10250,
-    "persona_used": "Institutional Hedge Fund",
-    "ai_provider_model": "ChatGPT (GPT-4o)"
-  },
-  "executive_summary": {
-    "conviction_score": 88,
-    "master_bias": "STRONG_BULLISH",
-    "primary_action": "PULLBACK_BUY",
-    "one_sentence_thesis": "Fundamental defensif berpadu dengan akumulasi order block 1H..."
-  },
-  "perspectives": {...},
-  "scenario_matrix": {...},
-  "execution_blueprint": {...},
-  "forensic_checklist": [...]
-}
-```
-
----
-
-## 3. Pemindai Sinyal Realtime (`/api/signals/*`)
-
-### `POST /api/signals/scan`
-Menjalankan pemindaian sinyal kuantitatif realtime secara multi-threaded di latar belakang untuk seluruh emiten IDX (atau daftar ticker tertentu) dan menyinkronkan data ke SQLite.
-
-#### Request Body (Opsional)
-```json
-{
-  "tickers": ["BBCA", "BBRI", "BMRI", "VKTR", "AUTO", "DSSA", "PTBA", "TLKM"]
-}
-```
-
-#### Response Body (200 OK)
-```json
-{
-  "scan_time": "31 Aug 2026 10:30 WIB",
-  "total_scanned": 8,
-  "signals_found": 8,
-  "signals": [
-    {
-      "id": 1,
-      "ticker": "VKTR",
-      "company_name": "VKTR Teknologi Mobilitas Tbk",
-      "signal_type": "BUY",
-      "signal_date": "2026-08-28",
-      "relt_score": 85,
-      "relt_rating": "Grade A+",
-      "relt_action": "ULTRA BUY",
-      "entry_price": 965.0,
-      "stop_loss": 907.1,
-      "tp1": 1051.85,
-      "tp2": 1109.75,
-      "status": "OPEN"
-    }
-  ]
-}
-```
-
----
-
-### `GET /api/signals/latest`
-Mengambil daftar sinyal terbaru dari database SQLite tanpa memicu pemindaian ulang berat.
-
-#### Query Parameters
-- `limit` *(int, default: 100)*: Jumlah maksimal data sinyal yang diambil.
-- `status` *(string, optional)*: Filter status sinyal (`OPEN`, `TP1_HIT`, `TP2_HIT`, `SL_HIT`).
-
----
-
-## 4. Multi-Strategy Screener (`/api/screener`)
-
-### `POST /api/screener`
-Memindai daftar saham berdasarkan strategi preset yang dipilih atau kustomisasi filter teknikal.
-
-#### Request Body
-```json
-{
-  "preset": "bluechip_lq45",
-  "custom_tickers": []
-}
-```
-*Pilihan preset yang tersedia*: `"bluechip_lq45"`, `"high_dividend"`, `"bpjs_daytrade"`, `"bsjp_1530"`, `"rebound_ma20"`, `"breakout_52w"`.
-
-#### Response Body (200 OK)
-```json
-{
-  "preset": "bluechip_lq45",
-  "total_matches": 12,
-  "results": [
-    {
-      "ticker": "BBCA",
-      "last_price": 10250.0,
-      "score": 85,
-      "rating": "Grade A+",
-      "action": "ULTRA BUY",
-      "volume_ratio": 1.45,
-      "pe_ratio": 24.2,
-      "pb_ratio": 4.8
-    }
-  ]
-}
-```
-
----
-
-## 5. Layanan Harga, Berita & Profil Perusahaan
-
-### `GET /api/price/{ticker}`
-Mengambil harga terkini dan status sesi bursa secara instan (digunakan untuk realtime poller di frontend).
-
-#### Response Body (200 OK)
-```json
-{
-  "ticker": "BBCA",
-  "price": 10250.0,
-  "label": "Live SESI_2",
-  "timestamp": 1756611300
-}
-```
-
----
-
-### `GET /api/news/{ticker}`
-Mengambil 15 berita bursa dan sentimen pasar terkini dari berbagai portal keuangan.
-
-#### Response Body (200 OK)
-```json
-{
-  "ticker": "BBCA",
-  "news_count": 15,
-  "articles": [
-    {
-      "title": "BCA Cetak Laba Bersih Rp45 Triliun di Kuartal III",
-      "publisher": "Bisnis.com",
-      "link": "https://...",
-      "published_date": "2026-08-30",
-      "sentiment": "POSITIVE"
-    }
-  ]
-}
-```
-
----
-
-### `GET /api/ticker/ticker-info/{ticker}`
-Mengambil data profil perusahaan, industri, situs resmi, dan statistik saham untuk popup modal profil.
-
-#### Response Body (200 OK)
-```json
-{
-  "ticker": "JATI",
-  "name": "PT Informasi Teknologi Indonesia Tbk",
-  "sector": "Technology",
-  "industry": "Software & IT Services",
-  "website": "https://jati.id",
-  "city": "Jakarta",
-  "description": "PT Informasi Teknologi Indonesia Tbk (JATI) bergerak di bidang solusi komunikasi digital...",
-  "shares_outstanding": 3250000000
 }
 ```

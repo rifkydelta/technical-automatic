@@ -14,7 +14,7 @@
 <br/>
 
 **Platform Intelijen Pasar Finansial Kuantitatif Generasi Baru untuk Seluruh Emiten di Bursa Efek Indonesia (BEI / IDX).**  
-*Menggabungkan Analisis Multi-Timeframe, Smart Money Concepts (SMC), Pemindai Sinyal 1-Jam Realtime, Model Skoring 10-Faktor, Forensik Laba (Piotroski & Beneish), Jembatan Komunitas Stockbit, serta Engine Prompt AI 360° dengan Dashboard Riset Standar Institusi.*
+*Menggabungkan Analisis Multi-Timeframe, Smart Money Concepts (SMC), Pemindai Sinyal Realtime (Server-Side Pagination & Precision Datepicker), Model Skoring 10-Faktor, Forensik Laba (Piotroski & Beneish), Jembatan Komunitas Stockbit, serta Engine Prompt AI 360° dengan Dashboard Riset Standar Institusi.*
 
 ---
 
@@ -58,191 +58,78 @@ Anda dapat langsung menjalankan **IDX Terminal** dalam hitungan detik menggunaka
 
 ---
 
-### Opsi B: Menjalankan Secara Manual via Terminal CLI
-Jika Anda menggunakan macOS/Linux atau ingin kontrol manual:
-
+### Opsi B: Menjalankan Manual via Terminal CLI
 ```bash
-# 1. Jalankan Backend (FastAPI)
-cd backend
-python -m venv venv
-# Aktifkan venv: source venv/bin/activate (Linux/Mac) atau venv\Scripts\activate (Windows)
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+# Terminal 1: Backend (FastAPI)
+cd c:\technical-automatic\backend
+venv\Scripts\activate
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-# 2. Jalankan Frontend (Next.js) pada terminal terpisah
-cd frontend
-npm install
+# Terminal 2: Frontend (Next.js 16 Turbopack)
+cd c:\technical-automatic\frontend
 npm run dev
 ```
-</details>
 
-> [!TIP]
-> **Swagger Interactive API Documentation** otomatis tersedia di [`http://localhost:8000/docs`](http://localhost:8000/docs) saat backend berjalan.
+</details>
 
 ---
 
 ## 🌟 Fitur Unggulan (Key Features)
 
-| Kategori Fitur | Kemampuan Utama |
-| :--- | :--- |
-| **🤖 360° AI Analyst Engine** | Ekstraksi 100% data kuantitatif komprehensif (Finansial 4-Tahun, Piotroski 9-Poin, Beneish M-Score, Order Blocks, Level Pivot Fibonacci, 15 Berita terkini) dengan 1-Klik Launcher ke 5 Provider AI (**ChatGPT, Claude, DeepSeek, Google Gemini, Perplexity**), kustomisasi posisi modal (*Average Price & Floating PnL*), serta rendering otomatis **Executive Research Dashboard** dengan *Radial Conviction Gauge (0-100)*. |
-| **🔗 Stockbit Adaptive Bridge** | Tombol 1-klik adaptif di Header, Breadcrumb, dan Drawer Profil untuk langsung membuka stream diskusi komunitas, sentimen ritel, dan keterbukaan informasi emiten di **Stockbit** (`https://stockbit.com/symbol/{TICKER}`). |
-| **📡 Live Signal Scanner** | Pemindai 800+ saham otomatis dengan filter tren ketat (*Strict Trend Regime*), area entri 1-Jam presisi (*1H Entry Area*), dan rekam jejak backtest win rate transparan. Dilengkapi toolbar pencarian instan dan filter status (*Hanya OPEN, Grade A+, Ultra Buy, TP Hit, SL Hit*). |
-| **⚡ RELT Quantitative Engine** | **10-Factor Scoring Model (0-100)**: Evaluasi momentum, volume surge, RSI, MACD, Order Blocks, dan volatilitas ATR. Mengunci risiko Stop Loss adaptif `[3.0%, 8.0%]` dan alokasi lot bulat pasti (`math.floor`). |
-| **🎯 Dual-Target Execution** | **TP1 (1.5R)** mengunci 50% profit dan memindahkan Stop Loss ke *Breakeven (+0.5%)*; **TP2 (2.5R)** sebagai target *runner* tren besar. |
-| **🧠 Smart Money Concepts (SMC)** | Deteksi otomatis **Fair Value Gaps (Bullish & Bearish FVG)**, **Order Blocks (OB)**, **Break of Structure (BOS)**, **Change of Character (CHOCH)**, dan *Liquidity Sweeps*. |
-| **🔍 Multi-Strategy Screener** | Preset bawaan: **Bluechip LQ45**, **High Dividend Yield**, **BPJS Daytrade**, **BSJP 15:30 (Beli Sore Jual Pagi)**, **Rebound MA20**, dan **Breakout 52-Week High**. |
-| **💎 Forensik & Valuasi Multi-Model** | Evaluasi Nilai Wajar: **Discounted Cash Flow (DCF)**, **Benjamin Graham Number**, **Peter Lynch Model**, **PBV Historical Band**, Audit **9-Point Piotroski F-Score**, **8-Variable Beneish M-Score**, dan Analisis Pertumbuhan 3-Tahun. |
-| **📊 Advanced Charting** | Canvas interaktif **TradingView Lightweight Charts v4** dengan sinkronisasi pin marker sinyal dan penyesuaian ukuran otomatis (**`ResizeObserver`**). |
+### 1. 📡 Live Signal Radar (Server-Side Pagination & Precision Datepicker)
+- **Akses Penuh 2.860+ Rekam Jejak Sinyal**: Sistem pagination server-side berbasis SQLite WAL (`LIMIT` & `OFFSET`) dengan pilihan 25, 50, 100, atau 200 baris per halaman.
+- **Precision Calendar Datepicker**: Filter tanggal transaksi spesifik berformat ISO `YYYY-MM-DD` atau pilih dari shortcut sesi perdagangan teraktif di database.
+- **Siklus Hidup Terkonfirmasi**: Filter transparan untuk status `🟢 Aktif / Entry`, `🚀 Hit TP (TP1/TP2)`, `🛑 Stop Loss`, dan `🏁 Closed Trade`.
+- **4 Clickable Live KPI Cards**: Ribbon metrik beranda interaktif yang langsung membuka tabel sinyal terfilter.
 
----
+### 2. ⚡ High-Probability RELT Quantitative Trading Engine
+- **10-Factor Scoring Model**: Evaluasi komprehensif dari 0 hingga 100 berdasarkan tren makro, momentum, volume surge, order block, FVG, dan rasio risiko.
+- **Dynamic Swing-Low Invalidation (SL)**: Kalkulasi Stop Loss adaptif berbasis titik kritis struktur pasar $\min(\text{Swing Low 5-Bars}, \text{Entry} - 1.5\times\text{ATR})$ dalam koridor aman `[3.0%, 8.0%]`.
+- **Dual-Target Execution (1.5R & 2.5R)**: TP1 mengunci profit 50% porsi dan otomatis memindahkan SL ke *Breakeven (+0.5%)*; TP2 sebagai target *runner* tren besar.
+- **IDX Lot Sizing Math**: Perhitungan alokasi lot bulat pasti menggunakan `math.floor` ketat (1 Lot = 100 Lembar).
 
-## 🤖 AI Analyst & Prompt Intelligence Hub
+### 3. 🧠 Smart Money Concepts (SMC) & Deteksi Pola Grafik
+- Deteksi otomatis Fair Value Gaps (*Bullish & Bearish FVG*), Order Blocks (OB), Break of Structure (BOS), Change of Character (CHOCH), dan Liquidity Sweeps.
+- Pengenalan 10 pola grafik klasik (*Double Bottom, Cup & Handle, Ascending Triangle, Head & Shoulders, Flags, Wedges*) dengan visualisasi target harga.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    AI MARKET INTELLIGENCE ORCHESTRATION                     │
-│                                                                             │
-│  [1] 360° Data Extractor ──► 4Y Financials + Piotroski + Beneish + SMC      │
-│  [2] Persona Selector   ──► Hedge Fund • Swing Trader • Value • Forensic   │
-│  [3] Portfolio Input    ──► User Avg Price ──► Realtime Floating PnL        │
-│  [4] 1-Click Launchers  ──► ChatGPT • Claude • DeepSeek • Gemini • Perplexity │
-│  [5] JSON Schema Parser ──► 6 Integrity Badges + Regex Markdown Cleaner     │
-│  [6] Executive Dashboard──► Radial Gauge (0-100) + Trailing SL + Blueprint  │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+### 4. ⏰ Mesin Waktu Eksekusi 1-Jam Intraday (1H Entry Timing Engine)
+- Memetakan sinyal Daily ke grafik 1-Jam untuk menemukan jam eksekusi bursa terbaik.
+- Penentuan area entry presisi (`ZoneLow` — `ZoneHigh`) dan status `ENTRY NOW` vs `WAIT FOR PULLBACK`.
 
----
+### 5. 🔍 Forensik Laba & Valuasi Multi-Model
+- **Piotroski 9-Point F-Score**: Evaluasi kekuatan fundamental dan efisiensi operasional.
+- **Beneish 8-Ratio M-Score**: Deteksi dini potensi manipulasi laporan keuangan akrual.
+- **5 Model Valuasi Konsensus**: DCF 2-Stage, Graham Formula, PBV vs ROE Fair Band, PE Multiple, dan Nilai Buku Berwujud Bersih.
 
-## 📐 Algoritma Kuantitatif & Manajemen Risiko
+### 6. 🌐 Jembatan Komunitas Saham Stockbit Terintegrasi
+- Tombol akses cepat 1-klik menuju forum diskusi publik, stream berita, dan feeds emiten terkait di Stockbit.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       RELT 10-FACTOR SCORING PIPELINE                       │
-│                                                                             │
-│  [1] Trend Alignment (EMA 9/21/50/200)      [6] Smart Money (FVG / OB)      │
-│  [2] Supertrend Polarity (Bullish/Bearish)  [7] Candlestick Patterns        │
-│  [3] MACD Momentum & Histogram              [8] Structural Chart Patterns   │
-│  [4] RSI Optimal Momentum [50.0 - 75.0]     [9] Reward-to-Risk Ratio >= 2.0 │
-│  [5] Volume Surge (>= 1.15x MA20)          [10] Low Volatility Risk <= 6.0% │
-└──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │
-                        Strict Trend Regime Filter Gate
-             (Close > EMA50 AND Close > EMA200 AND Supertrend Bullish)
-                                       │
-                 ┌─────────────────────┴─────────────────────┐
-                 ▼                                           ▼
-          [LULUS FILTER]                              [TIDAK LULUS]
-      Rating Grade A+ / A / B+                    Action dipaksa WAIT
-  Entry @ Market / 1H Pullback Zone             Dilarang Beli (Downtrend)
-  Stop Loss: Dynamic Swing-Low (3%-8%)
-  TP1 @ 1.5R (Lock 50% + Breakeven SL)
-  TP2 @ 2.5R (Runner Target)
-```
+### 7. 🤖 AI Market Intelligence & Prompt Engine 360°
+- Ekstraksi 100% data pasar dan fundamental menjadi master prompt siap salin untuk ChatGPT, Claude, DeepSeek R1, Gemini, dan Perplexity.
+- Importer respon JSON dengan 6 Schema Integrity Badges dan Executive Research Dashboard interaktif.
 
----
-
-## 🏛️ Arsitektur Sistem
-
-```mermaid
-flowchart LR
-    subgraph DataSources["☁️ Data Feeds & External AI"]
-        YF["Yahoo Finance API<br/>(OHLCV Daily, 1H, 15M)"]
-        SB["Stockbit IDX<br/>(Community & Streams)"]
-        LLM["AI Providers<br/>(ChatGPT, Claude, DeepSeek, Gemini, Perplexity)"]
-    end
-
-    subgraph Backend["🚀 FastAPI Backend (Port 8000)"]
-        DF["DataFetcher<br/>(TTL Cache 30s)"]
-        ENG["Quantitative & SMC Engines<br/>(RELT, Supertrend, Valuation, Forensic)"]
-        AIP["AiPromptService<br/>(360° Intelligence Extractor)"]
-        SCAN["SignalScannerService<br/>(Multi-Threaded Workers)"]
-        DB[("SQLite 3 Database<br/>(signals.db WAL Mode)")]
-        
-        DF --> ENG
-        DF --> AIP
-        SCAN --> ENG
-        SCAN --> DB
-    end
-
-    subgraph Frontend["⚡ Next.js 16 UI (Port 3000)"]
-        PORTAL["Home Hub (/)"]
-        ANALYSIS["Analysis (/analysis/[ticker])"]
-        AIVIEW["Executive AI Report (/analysis/[ticker]?tab=ai)"]
-        SIGNALS["Live Signals (/signals)"]
-        SCREENER["Screener (/screener)"]
-        LEARN["Learning (/learning)"]
-    end
-
-    DataSources --> DF
-    AIP -.->|Export Prompt| LLM
-    LLM -.->|Import JSON| AIVIEW
-    Backend <-->|Async REST API| Frontend
-```
+### 8. 🎨 Anti-Slop Institutional Liquid-Glass Design System
+- Dibangun dengan standar estetika `taste-skill`: tipografi solid bebas gradasi pelangi acak, 4 token border-radius baku, micro-interactions cair, dan tata letak responsif 2-kolom split hero.
 
 ---
 
 ## 📚 Dokumentasi Lengkap (Documentation Suite)
 
-Dokumentasi komprehensif tingkat institusional telah disusun secara rinci dalam direktori [`docs/`](./docs/):
+Seluruh spesifikasi teknis platform didokumentasikan dalam 8 berkas panduan di direktori `docs/`:
 
-1. [📖 **`docs/1_README.md`** — Ringkasan Proyek & Fitur Lengkap](./docs/1_README.md)
-2. [🏛️ **`docs/2_SYSTEM_ARCHITECTURE.md`** — Arsitektur Sistem, Aliran Data & AI Integration](./docs/2_SYSTEM_ARCHITECTURE.md)
-3. [📐 **`docs/3_QUANTITATIVE_ALGORITHMS.md`** — Spesifikasi Algoritma Kuantitatif, SMC & Forensik](./docs/3_QUANTITATIVE_ALGORITHMS.md)
-4. [🌐 **`docs/4_API_SPECIFICATION.md`** — Spesifikasi REST API Lengkap (Request/Response JSON)](./docs/4_API_SPECIFICATION.md)
-5. [🎨 **`docs/5_FRONTEND_DESIGN_SYSTEM.md`** — Frontend Design System, Charting & AI View Tokens](./docs/5_FRONTEND_DESIGN_SYSTEM.md)
-6. [💾 **`docs/6_DATABASE_SCHEMA_WAL.md`** — Skema Database & Konkurensi SQLite WAL](./docs/6_DATABASE_SCHEMA_WAL.md)
-7. [🚀 **`docs/7_DEPLOYMENT_OPERATIONS.md`** — Panduan Deployment, Operasional & Performance Tuning](./docs/7_DEPLOYMENT_OPERATIONS.md)
-8. [🤖 **`docs/8_AI_ANALYST_ENGINE.md`** — Master AI Prompt Intelligence, 5 Providers & JSON Contracts](./docs/8_AI_ANALYST_ENGINE.md)
-
----
-
-## 📁 Struktur Direktori Proyek
-
-```
-c:\technical-automatic\
-├── README.md                      # Dokumentasi Utama (GitHub Entrypoint)
-├── run.bat                        # Launcher 1-Klik (Backend & Frontend)
-├── setup.bat                      # Setup Otomatis 1-Klik (Venv + NPM)
-├── docs/                          # Suite Dokumentasi Master
-│   ├── 1_README.md
-│   ├── 2_SYSTEM_ARCHITECTURE.md
-│   ├── 3_QUANTITATIVE_ALGORITHMS.md
-│   ├── 4_API_SPECIFICATION.md
-│   ├── 5_FRONTEND_DESIGN_SYSTEM.md
-│   ├── 6_DATABASE_SCHEMA_WAL.md
-│   ├── 7_DEPLOYMENT_OPERATIONS.md
-│   └── 8_AI_ANALYST_ENGINE.md
-├── backend/                       # Server FastAPI (Python 3.12)
-│   ├── main.py                    # Entrypoint Server & Router Registrations
-│   ├── db.py                      # Konfigurasi SQLite WAL Database
-│   ├── requirements.txt           # Dependensi Python
-│   ├── api/endpoints/             # Controllers: analyze, ai_prompt, signals, screener, market, news
-│   ├── services/                  # Engines: ai_prompt_service, relt, smc, valuation, backtester
-│   └── data/                      # Persistent signals.db
-└── frontend/                      # Web App Next.js 16 (Turbopack)
-    ├── package.json               # Dependensi Node.js
-    └── src/
-        ├── app/                   # App Router Pages (/, /analysis, /signals, /screener, /learning)
-        ├── components/            # UI, Modals, Charting & Executive AI Report Components
-        └── utils/                 # aiPromptGenerator & Calculation Helpers
-```
+| No | Dokumen | Fokus & Isi Pembahasan |
+|---|---|---|
+| 1 | [**`1_README.md`**](file:///c:/technical-automatic/docs/1_README.md) | Ringkasan Proyek & Fitur Lengkap |
+| 2 | [**`2_SYSTEM_ARCHITECTURE.md`**](file:///c:/technical-automatic/docs/2_SYSTEM_ARCHITECTURE.md) | Arsitektur Sistem, Aliran Data & Diagram Sequence |
+| 3 | [**`3_QUANTITATIVE_ALGORITHMS.md`**](file:///c:/technical-automatic/docs/3_QUANTITATIVE_ALGORITHMS.md) | Rumus Kuantitatif RELT, SL/TP Bounds & Forensik Laba |
+| 4 | [**`4_API_SPECIFICATION.md`**](file:///c:/technical-automatic/docs/4_API_SPECIFICATION.md) | Spesifikasi REST API Lengkap & Skema JSON |
+| 5 | [**`5_FRONTEND_DESIGN_SYSTEM.md`**](file:///c:/technical-automatic/docs/5_FRONTEND_DESIGN_SYSTEM.md) | Design Tokens, Anti-Slop Principles & Komponen UI |
+| 6 | [**`6_DATABASE_SCHEMA_WAL.md`**](file:///c:/technical-automatic/docs/6_DATABASE_SCHEMA_WAL.md) | Skema SQLite WAL, Indexing & Query Paginasi |
+| 7 | [**`7_DEPLOYMENT_OPERATIONS.md`**](file:///c:/technical-automatic/docs/7_DEPLOYMENT_OPERATIONS.md) | Panduan Deployment 1-Klik, CLI & Operasional |
+| 8 | [**`8_AI_ANALYST_ENGINE.md`**](file:///c:/technical-automatic/docs/8_AI_ANALYST_ENGINE.md) | Arsitektur Prompt Generator AI 360° & JSON Parser |
 
 ---
 
-## 🧪 Menjalankan Automated Tests
-
-Backend dilengkapi dengan suite pengujian otomatis untuk memverifikasi database WAL, API contracts, algoritma RELT, dan AI Prompt Engine:
-
-```bash
-cd backend
-venv\Scripts\python.exe -m unittest test_ai_prompt_engine.py test_signal_db.py test_signal_api.py test_relt_signal.py test_relt_total_audit.py test_screener.py test_bpjs_screener.py test_system_optimizations.py
-```
-*Hasil yang diharapkan: `Ran 22 tests ... OK` (100% Passed).*
-
----
-
-## 👨‍💻 Author & Attribution
-- **Creator & Lead Engineer**: [@rifkydelta](https://github.com/rifkydelta)
-- **Engine**: *IDX Terminal Pro Algorithmic Market Intelligence*
-- **Hak Cipta**: Dilindungi Undang-Undang.
+<div align="center">
+  <sub>Dibangun untuk Trader & Analis Pasar Modal Indonesia • IDX Terminal 2026</sub>
+</div>

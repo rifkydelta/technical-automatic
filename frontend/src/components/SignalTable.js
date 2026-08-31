@@ -17,7 +17,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 
-export default function SignalTable({ signals = [], onRowClick, onTickerSelect }) {
+export default function SignalTable({ signals = [], onRowClick, onTickerSelect, isLoading = false }) {
   const [sortField, setSortField] = useState('relt_score');
   const [sortDirection, setSortDirection] = useState('desc');
   const [searchQuery, setSearchQuery] = useState('');
@@ -294,9 +294,66 @@ export default function SignalTable({ signals = [], onRowClick, onTickerSelect }
           </tr>
         </thead>
         <tbody>
-          {sortedSignals.map((item, index) => {
-            const isBuy = item.signal_type === 'BUY';
-            const rawDate = item.signal_date || (item.signal_time ? item.signal_time.slice(0, 10) : '');
+          {isLoading ? (
+            [1, 2, 3, 4, 5, 6].map((idx) => (
+              <tr
+                key={idx}
+                style={{
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                  background: idx % 2 === 0 ? 'rgba(255, 255, 255, 0.01)' : 'transparent',
+                }}
+              >
+                <td style={{ padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div className="skeleton skeleton-text" style={{ width: '60px', height: '12px' }} />
+                    <div className="skeleton skeleton-text" style={{ width: '40px', height: '10px' }} />
+                  </div>
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="skeleton skeleton-badge" style={{ width: '52px', height: '24px' }} />
+                    <div className="skeleton skeleton-text" style={{ width: '90px', height: '12px' }} />
+                  </div>
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <div className="skeleton skeleton-badge" style={{ width: '55px', height: '22px' }} />
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <div className="skeleton skeleton-badge" style={{ width: '70px', height: '22px' }} />
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <div className="skeleton skeleton-avatar" style={{ width: '26px', height: '26px' }} />
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <div className="skeleton skeleton-text" style={{ width: '75px', height: '13px' }} />
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div className="skeleton skeleton-text" style={{ width: '60px', height: '12px' }} />
+                    <div className="skeleton skeleton-text" style={{ width: '50px', height: '10px' }} />
+                  </div>
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div className="skeleton skeleton-text" style={{ width: '60px', height: '12px' }} />
+                    <div className="skeleton skeleton-text" style={{ width: '60px', height: '12px' }} />
+                  </div>
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <div className="skeleton skeleton-badge" style={{ width: '45px', height: '20px' }} />
+                </td>
+                <td style={{ padding: '14px 16px' }}>
+                  <div className="skeleton skeleton-badge" style={{ width: '80px', height: '22px' }} />
+                </td>
+                <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                  <div className="skeleton skeleton-button" style={{ width: '60px', height: '26px', margin: '0 auto' }} />
+                </td>
+              </tr>
+            ))
+          ) : (
+            sortedSignals.map((item, index) => {
+              const isBuy = item.signal_type === 'BUY';
+              const rawDate = item.signal_date || (item.signal_time ? item.signal_time.slice(0, 10) : '');
             let dateFormatted = '';
             if (rawDate && rawDate.includes('-')) {
               const datePart = rawDate.split(' ')[0];
@@ -343,11 +400,12 @@ export default function SignalTable({ signals = [], onRowClick, onTickerSelect }
                 border: 'rgba(244, 63, 94, 0.4)'
               };
             } else if (item.status === 'CLOSED') {
+              const isProfitable = item.actual_pnl_pct > 0 || (item.actual_exit_price && item.actual_exit_price > item.entry_price);
               statusBadge = {
-                text: '⏳ EXIT AT CLOSE',
-                bg: 'rgba(251, 191, 36, 0.18)',
-                color: '#fbbf24',
-                border: 'rgba(251, 191, 36, 0.4)'
+                text: isProfitable ? '✨ PROFIT EXIT' : '⏳ EXIT AT CLOSE',
+                bg: isProfitable ? 'rgba(52, 211, 153, 0.18)' : 'rgba(251, 191, 36, 0.18)',
+                color: isProfitable ? '#34d399' : '#fbbf24',
+                border: isProfitable ? 'rgba(52, 211, 153, 0.4)' : 'rgba(251, 191, 36, 0.4)'
               };
             }
 
@@ -602,7 +660,7 @@ export default function SignalTable({ signals = [], onRowClick, onTickerSelect }
                 </td>
               </tr>
             );
-          })}
+          }))}
         </tbody>
       </table>
       </div>

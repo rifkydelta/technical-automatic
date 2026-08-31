@@ -1,6 +1,6 @@
 # 6. Skema Database & Konkurensi WAL (Database Schema & Storage Engine)
 
-Dokumen ini mendokumentasikan skema database SQLite, tipe data, indeks pencarian, optimasi konkurensi *Write-Ahead Logging (WAL)*, logika *idempotent upsert*, serta skema persistensi lokal (*LocalStorage*) pada **IDX Terminal**.
+Dokumen ini mendokumentasikan skema database SQLite, tipe data, indeks pencarian, optimasi konkurensi *Write-Ahead Logging (WAL)*, logika *idempotent upsert*, serta pola query paginasi server-side pada **IDX Terminal**.
 
 ---
 
@@ -47,78 +47,68 @@ CREATE TABLE IF NOT EXISTS signals (
 
 ## 2. Indeks Performa Tinggi (Index Strategy)
 
-Untuk memastikan query `SELECT`, `ORDER BY`, dan `FILTER` berjalan dalam waktu `< 5ms` bahkan pada ribuan baris data:
+Untuk memastikan query `SELECT`, `ORDER BY`, filter multi-kolom, dan server-side pagination berjalan dalam waktu `< 2ms` bahkan pada puluhan ribu baris data:
 
 ```sql
 CREATE INDEX IF NOT EXISTS idx_signals_ticker ON signals(ticker);
 CREATE INDEX IF NOT EXISTS idx_signals_time ON signals(signal_time);
 CREATE INDEX IF NOT EXISTS idx_signals_date ON signals(signal_date);
 CREATE INDEX IF NOT EXISTS idx_signals_status ON signals(status);
+CREATE INDEX IF NOT EXISTS idx_signals_pagination ON signals(signal_date DESC, id DESC);
 ```
 
 ---
 
-## 3. Optimasi Konkurensi WAL (Write-Ahead Logging Pragmas)
+## 3. Definisi Status Siklus Hidup Sinyal (Signal Lifecycle States)
 
-Setiap koneksi database diinisialisasi dengan konfigurasi berikut:
+Setiap trade signal memiliki siklus hidup yang tervalidasi secara deterministik:
+
+| Status Code | Label UI | Deskripsi Kondisi |
+|---|---|---|
+| `OPEN` | `🟢 Aktif / Entry` | Sinyal baru dihasilkan dari scanner, harga masih berada dalam area entry atau sedang berjalan menuju target TP1/TP2. |
+| `HIT_TP1` | `🎯 HIT TP1` | Harga telah menyentuh target Take Profit 1 (1.5R). 50% lot diamankan dan Stop Loss otomatis digeser ke *Breakeven (+0.5%)*. |
+| `HIT_TP2` | `🚀 HIT TP2` | Harga sukses mencapai target Take Profit 2 (2.5R Runner). Posisi ditutup penuh dengan profit maksimal. |
+| `HIT_SL` | `🛑 STOP LOSS` | Harga menyentuh level Stop Loss adaptif. Posisi ditutup untuk membatasi risiko kerugian sesuai koridor proteksi `[3%, 8%]`. |
+| `CLOSED` | `✨ PROFIT EXIT` / `⏳ EXIT AT CLOSE` | Posisi ditutup pada akhir sesi bursa atau penutupan tren (Chandelier/Supertrend breakdown). Jika `actual_pnl_pct > 0`, ditandai sebagai *Profit Exit*. |
+
+---
+
+## 4. Konfigurasi SQLite WAL Mode (Concurrency & Reliability)
+
+Aplikasi mengaktifkan mode **WAL (Write-Ahead Logging)** secara otomatis saat backend FastAPI dinyalakan:
+
+```python
+# backend/services/signal_repository.py
+conn.execute("PRAGMA journal_mode = WAL;")
+conn.execute("PRAGMA synchronous = NORMAL;")
+conn.execute("PRAGMA busy_timeout = 5000;")
+```
+
+### Keunggulan WAL Mode:
+1. **Non-Blocking Reads & Writes**: Operasi pembacaan (dashboard, pagination, charts) tidak pernah terblokir oleh operasi penulisan background scanner yang sedang memproses 800+ saham.
+2. **ACID Compliant**: Transaksi batch dilindungi dengan rollback otomatis jika terjadi gangguan daya atau crash tak terduga.
+3. **Low Write Amplification**: Penulisan dilakukan secara sequential ke file `.db-wal` sebelum di-checkpoint secara otomatis ke database utama.
+
+---
+
+## 5. Pola Query Paginasi Server-Side
+
+Query yang digunakan oleh endpoint `GET /api/signals/paginated`:
 
 ```sql
-PRAGMA journal_mode = WAL;
-PRAGMA synchronous = NORMAL;
-PRAGMA cache_size = 10000;
-PRAGMA busy_timeout = 5000;
+-- 1. Hitung total filtered records untuk total halaman
+SELECT COUNT(*) as total FROM signals 
+WHERE 1=1 
+  AND signal_type = :signal_type 
+  AND status = :status 
+  AND signal_date = :signal_date;
+
+-- 2. Ambil baris data per halaman dengan OFFSET
+SELECT * FROM signals 
+WHERE 1=1 
+  AND signal_type = :signal_type 
+  AND status = :status 
+  AND signal_date = :signal_date
+ORDER BY signal_date DESC, id DESC 
+LIMIT :page_size OFFSET :offset;
 ```
-
-### Manfaat Konfigurasi WAL:
-1. **Zero Database Locking**: Operasi pembacaan sinyal dari frontend tidak pernah terhalang oleh proses pemindaian multi-threaded background scanner.
-2. **Durabilitas Tinggi**: Transaksi dituliskan ke berkas *Write-Ahead Log* (`signals.db-wal`) sebelum digabungkan ke berkas utama secara aman.
-
----
-
-## 4. Logika Idempotent Upsert (`ON CONFLICT`)
-
-Saat pemindaian sinyal dijalankan berulang kali, data tidak akan bertumpuk berlebihan melainkan diperbarui secara atomik:
-
-```sql
-INSERT INTO signals (
-    ticker, company_name, signal_type, signal_date, signal_time,
-    backtest_winrate, backtest_total_trades, backtest_total_pnl,
-    relt_score, relt_rating, relt_action,
-    entry_price, stop_loss, tp1, tp2,
-    h1_entry_zone_low, h1_entry_zone_high, h1_entry_status, h1_confirmation,
-    minute_bar_open, projected_pnl_pct, projected_pnl_nominal,
-    direction, status, actual_exit_price, actual_pnl_pct,
-    created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-ON CONFLICT(ticker, signal_date, signal_type) DO UPDATE SET
-    status = excluded.status,
-    actual_exit_price = excluded.actual_exit_price,
-    actual_pnl_pct = excluded.actual_pnl_pct,
-    relt_score = excluded.relt_score,
-    relt_action = excluded.relt_action,
-    relt_rating = excluded.relt_rating,
-    backtest_winrate = excluded.backtest_winrate,
-    backtest_total_trades = excluded.backtest_total_trades,
-    backtest_total_pnl = excluded.backtest_total_pnl,
-    h1_entry_status = excluded.h1_entry_status,
-    h1_confirmation = excluded.h1_confirmation,
-    projected_pnl_pct = excluded.projected_pnl_pct,
-    projected_pnl_nominal = excluded.projected_pnl_nominal,
-    stop_loss = excluded.stop_loss,
-    tp1 = excluded.tp1,
-    tp2 = excluded.tp2,
-    updated_at = CURRENT_TIMESTAMP;
-```
-
----
-
-## 5. Skema Penyimpanan Klien (Browser LocalStorage)
-
-Hasil analisis AI yang diimpor pengguna disimpan secara otomatis di sisi browser menggunakan LocalStorage:
-
-| Key LocalStorage | Tipe Data | Deskripsi |
-| :--- | :--- | :--- |
-| `ai_analysis_active_{TICKER}` | `JSON Object` | Laporan analisis AI yang sedang aktif dirender pada tab AI Analyst emiten tersebut. |
-| `ai_analysis_history_{TICKER}` | `Array of Objects` | Riwayat log analisis AI masa lalu untuk ticker terkait (maksimal 20 riwayat terakhir). |
-| `idx_terminal_watchlist` | `Array of Strings` | Daftar kode saham pantauan cepat pengguna. |
-| `idx_terminal_risk_budget` | `Float` | Preferensi ukuran modal portofolio (default: Rp100.000.000). |

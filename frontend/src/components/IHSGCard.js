@@ -56,14 +56,16 @@ export default function IHSGCard() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          animation: 'skeleton-pulse 2s infinite',
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          <div style={{ width: '110px', height: '10px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '4px' }} />
-          <div style={{ width: '130px', height: '24px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '6px' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div className="skeleton skeleton-avatar" style={{ width: '6px', height: '6px' }} />
+            <div className="skeleton skeleton-text" style={{ width: '110px', height: '10px' }} />
+          </div>
+          <div className="skeleton skeleton-text" style={{ width: '130px', height: '24px', borderRadius: '6px' }} />
         </div>
-        <div style={{ width: '110px', height: '24px', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: '20px' }} />
+        <div className="skeleton skeleton-badge" style={{ width: '110px', height: '26px', borderRadius: '20px' }} />
       </div>
     );
   }

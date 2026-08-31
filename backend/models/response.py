@@ -565,10 +565,30 @@ class SignalScanResponse(BaseModel):
 
 class SignalStatsResponse(BaseModel):
     total_signals: int = 0
+    total_emiten: int = 0
     buy_count: int = 0
     sell_count: int = 0
+    hit_tp_count: int = 0
+    hit_sl_count: int = 0
+    open_signals_count: int = 0
+    closed_count: int = 0
     avg_winrate: float = 0.0
+    top_winrate: Optional[float] = 0.0
     avg_proj_pnl: float = 0.0
     best_performer: Optional[str] = None
     best_pnl: Optional[float] = 0.0
+
+class SignalDateOption(BaseModel):
+    date: str
+    count: int
+
+class PaginatedSignalResponse(BaseModel):
+    items: List[SignalRow]
+    total_items: int
+    total_pages: int
+    current_page: int
+    page_size: int
+    has_next: bool
+    has_prev: bool
+    available_dates: List[SignalDateOption] = []
 
