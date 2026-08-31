@@ -1,7 +1,7 @@
 <div align="center">
 
 # ⚡ IDX TERMINAL
-### *Pro Algorithmic Market Intelligence & Smart Money Concepts Engine*
+### *Pro Algorithmic Market Intelligence, Smart Money Concepts & AI Multi-Model Research Hub*
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -14,12 +14,13 @@
 <br/>
 
 **Platform Intelijen Pasar Finansial Kuantitatif Generasi Baru untuk Seluruh Emiten di Bursa Efek Indonesia (BEI / IDX).**  
-*Menggabungkan Analisis Multi-Timeframe, Smart Money Concepts (SMC), Pemindai Sinyal 1-Jam Realtime, Model Skoring 10-Faktor, dan Valuasi Fundamental Otomatis.*
+*Menggabungkan Analisis Multi-Timeframe, Smart Money Concepts (SMC), Pemindai Sinyal 1-Jam Realtime, Model Skoring 10-Faktor, Forensik Laba (Piotroski & Beneish), Jembatan Komunitas Stockbit, serta Engine Prompt AI 360° dengan Dashboard Riset Standar Institusi.*
 
 ---
 
 [⚡ 1-Click Quickstart](#-1-click-quickstart-cara-menjalankan-termudah) •
 [🌟 Fitur Unggulan](#-fitur-unggulan-key-features) •
+[🤖 AI Analyst Engine](#-ai-analyst--prompt-intelligence-hub) •
 [📐 Algoritma Kuantitatif](#-algoritma-kuantitatif--manajemen-risiko) •
 [🏛️ Arsitektur Sistem](#️-arsitektur-sistem) •
 [📚 Dokumentasi Lengkap](#-dokumentasi-lengkap-documentation-suite)
@@ -84,13 +85,32 @@ npm run dev
 
 | Kategori Fitur | Kemampuan Utama |
 | :--- | :--- |
+| **🤖 360° AI Analyst Engine** | Ekstraksi 100% data kuantitatif komprehensif (Finansial 4-Tahun, Piotroski 9-Poin, Beneish M-Score, Order Blocks, Level Pivot Fibonacci, 15 Berita terkini) dengan 1-Klik Launcher ke 5 Provider AI (**ChatGPT, Claude, DeepSeek, Google Gemini, Perplexity**), kustomisasi posisi modal (*Average Price & Floating PnL*), serta rendering otomatis **Executive Research Dashboard** dengan *Radial Conviction Gauge (0-100)*. |
+| **🔗 Stockbit Adaptive Bridge** | Tombol 1-klik adaptif di Header, Breadcrumb, dan Drawer Profil untuk langsung membuka stream diskusi komunitas, sentimen ritel, dan keterbukaan informasi emiten di **Stockbit** (`https://stockbit.com/symbol/{TICKER}`). |
 | **📡 Live Signal Scanner** | Pemindai 800+ saham otomatis dengan filter tren ketat (*Strict Trend Regime*), area entri 1-Jam presisi (*1H Entry Area*), dan rekam jejak backtest win rate transparan. Dilengkapi toolbar pencarian instan dan filter status (*Hanya OPEN, Grade A+, Ultra Buy, TP Hit, SL Hit*). |
 | **⚡ RELT Quantitative Engine** | **10-Factor Scoring Model (0-100)**: Evaluasi momentum, volume surge, RSI, MACD, Order Blocks, dan volatilitas ATR. Mengunci risiko Stop Loss adaptif `[3.0%, 8.0%]` dan alokasi lot bulat pasti (`math.floor`). |
 | **🎯 Dual-Target Execution** | **TP1 (1.5R)** mengunci 50% profit dan memindahkan Stop Loss ke *Breakeven (+0.5%)*; **TP2 (2.5R)** sebagai target *runner* tren besar. |
 | **🧠 Smart Money Concepts (SMC)** | Deteksi otomatis **Fair Value Gaps (Bullish & Bearish FVG)**, **Order Blocks (OB)**, **Break of Structure (BOS)**, **Change of Character (CHOCH)**, dan *Liquidity Sweeps*. |
 | **🔍 Multi-Strategy Screener** | Preset bawaan: **Bluechip LQ45**, **High Dividend Yield**, **BPJS Daytrade**, **BSJP 15:30 (Beli Sore Jual Pagi)**, **Rebound MA20**, dan **Breakout 52-Week High**. |
-| **💎 Fundamental Valuation** | Multi-model nilai wajar: **Discounted Cash Flow (DCF)**, **Benjamin Graham Number**, **Peter Lynch Model**, **PBV Historical Band**, dan Analisis Pertumbuhan 3-Tahun (Revenue & Net Income CAGR). |
+| **💎 Forensik & Valuasi Multi-Model** | Evaluasi Nilai Wajar: **Discounted Cash Flow (DCF)**, **Benjamin Graham Number**, **Peter Lynch Model**, **PBV Historical Band**, Audit **9-Point Piotroski F-Score**, **8-Variable Beneish M-Score**, dan Analisis Pertumbuhan 3-Tahun. |
 | **📊 Advanced Charting** | Canvas interaktif **TradingView Lightweight Charts v4** dengan sinkronisasi pin marker sinyal dan penyesuaian ukuran otomatis (**`ResizeObserver`**). |
+
+---
+
+## 🤖 AI Analyst & Prompt Intelligence Hub
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    AI MARKET INTELLIGENCE ORCHESTRATION                     │
+│                                                                             │
+│  [1] 360° Data Extractor ──► 4Y Financials + Piotroski + Beneish + SMC      │
+│  [2] Persona Selector   ──► Hedge Fund • Swing Trader • Value • Forensic   │
+│  [3] Portfolio Input    ──► User Avg Price ──► Realtime Floating PnL        │
+│  [4] 1-Click Launchers  ──► ChatGPT • Claude • DeepSeek • Gemini • Perplexity │
+│  [5] JSON Schema Parser ──► 6 Integrity Badges + Regex Markdown Cleaner     │
+│  [6] Executive Dashboard──► Radial Gauge (0-100) + Trailing SL + Blueprint  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -126,18 +146,21 @@ npm run dev
 
 ```mermaid
 flowchart LR
-    subgraph DataSources["☁️ Data Feeds"]
+    subgraph DataSources["☁️ Data Feeds & External AI"]
         YF["Yahoo Finance API<br/>(OHLCV Daily, 1H, 15M)"]
-        GF["Google Finance<br/>(Quotes Fallback)"]
+        SB["Stockbit IDX<br/>(Community & Streams)"]
+        LLM["AI Providers<br/>(ChatGPT, Claude, DeepSeek, Gemini, Perplexity)"]
     end
 
     subgraph Backend["🚀 FastAPI Backend (Port 8000)"]
         DF["DataFetcher<br/>(TTL Cache 30s)"]
-        ENG["Quantitative & SMC Engines<br/>(RELT, Supertrend, Valuation)"]
+        ENG["Quantitative & SMC Engines<br/>(RELT, Supertrend, Valuation, Forensic)"]
+        AIP["AiPromptService<br/>(360° Intelligence Extractor)"]
         SCAN["SignalScannerService<br/>(Multi-Threaded Workers)"]
         DB[("SQLite 3 Database<br/>(signals.db WAL Mode)")]
         
         DF --> ENG
+        DF --> AIP
         SCAN --> ENG
         SCAN --> DB
     end
@@ -145,12 +168,15 @@ flowchart LR
     subgraph Frontend["⚡ Next.js 16 UI (Port 3000)"]
         PORTAL["Home Hub (/)"]
         ANALYSIS["Analysis (/analysis/[ticker])"]
+        AIVIEW["Executive AI Report (/analysis/[ticker]?tab=ai)"]
         SIGNALS["Live Signals (/signals)"]
         SCREENER["Screener (/screener)"]
         LEARN["Learning (/learning)"]
     end
 
     DataSources --> DF
+    AIP -.->|Export Prompt| LLM
+    LLM -.->|Import JSON| AIVIEW
     Backend <-->|Async REST API| Frontend
 ```
 
@@ -161,12 +187,13 @@ flowchart LR
 Dokumentasi komprehensif tingkat institusional telah disusun secara rinci dalam direktori [`docs/`](./docs/):
 
 1. [📖 **`docs/1_README.md`** — Ringkasan Proyek & Fitur Lengkap](./docs/1_README.md)
-2. [🏛️ **`docs/2_SYSTEM_ARCHITECTURE.md`** — Arsitektur Sistem & Aliran Data](./docs/2_SYSTEM_ARCHITECTURE.md)
-3. [📐 **`docs/3_QUANTITATIVE_ALGORITHMS.md`** — Spesifikasi Algoritma Kuantitatif & Matematika](./docs/3_QUANTITATIVE_ALGORITHMS.md)
+2. [🏛️ **`docs/2_SYSTEM_ARCHITECTURE.md`** — Arsitektur Sistem, Aliran Data & AI Integration](./docs/2_SYSTEM_ARCHITECTURE.md)
+3. [📐 **`docs/3_QUANTITATIVE_ALGORITHMS.md`** — Spesifikasi Algoritma Kuantitatif, SMC & Forensik](./docs/3_QUANTITATIVE_ALGORITHMS.md)
 4. [🌐 **`docs/4_API_SPECIFICATION.md`** — Spesifikasi REST API Lengkap (Request/Response JSON)](./docs/4_API_SPECIFICATION.md)
-5. [🎨 **`docs/5_FRONTEND_DESIGN_SYSTEM.md`** — Frontend Design System & Charting Engine](./docs/5_FRONTEND_DESIGN_SYSTEM.md)
+5. [🎨 **`docs/5_FRONTEND_DESIGN_SYSTEM.md`** — Frontend Design System, Charting & AI View Tokens](./docs/5_FRONTEND_DESIGN_SYSTEM.md)
 6. [💾 **`docs/6_DATABASE_SCHEMA_WAL.md`** — Skema Database & Konkurensi SQLite WAL](./docs/6_DATABASE_SCHEMA_WAL.md)
-7. [🚀 **`docs/7_DEPLOYMENT_OPERATIONS.md`** — Panduan Deployment & Operasional](./docs/7_DEPLOYMENT_OPERATIONS.md)
+7. [🚀 **`docs/7_DEPLOYMENT_OPERATIONS.md`** — Panduan Deployment, Operasional & Performance Tuning](./docs/7_DEPLOYMENT_OPERATIONS.md)
+8. [🤖 **`docs/8_AI_ANALYST_ENGINE.md`** — Master AI Prompt Intelligence, 5 Providers & JSON Contracts](./docs/8_AI_ANALYST_ENGINE.md)
 
 ---
 
@@ -184,33 +211,34 @@ c:\technical-automatic\
 │   ├── 4_API_SPECIFICATION.md
 │   ├── 5_FRONTEND_DESIGN_SYSTEM.md
 │   ├── 6_DATABASE_SCHEMA_WAL.md
-│   └── 7_DEPLOYMENT_OPERATIONS.md
+│   ├── 7_DEPLOYMENT_OPERATIONS.md
+│   └── 8_AI_ANALYST_ENGINE.md
 ├── backend/                       # Server FastAPI (Python 3.12)
 │   ├── main.py                    # Entrypoint Server & Router Registrations
 │   ├── db.py                      # Konfigurasi SQLite WAL Database
 │   ├── requirements.txt           # Dependensi Python
-│   ├── api/endpoints/             # Controllers: analyze, signals, screener, market, news
-│   ├── services/                  # Engines: relt, smc, supertrend, valuation, backtester
+│   ├── api/endpoints/             # Controllers: analyze, ai_prompt, signals, screener, market, news
+│   ├── services/                  # Engines: ai_prompt_service, relt, smc, valuation, backtester
 │   └── data/                      # Persistent signals.db
 └── frontend/                      # Web App Next.js 16 (Turbopack)
     ├── package.json               # Dependensi Node.js
     └── src/
         ├── app/                   # App Router Pages (/, /analysis, /signals, /screener, /learning)
-        ├── components/            # Reusable UI & Charting Components
-        └── utils/                 # Frontend RELT Calculation Helpers
+        ├── components/            # UI, Modals, Charting & Executive AI Report Components
+        └── utils/                 # aiPromptGenerator & Calculation Helpers
 ```
 
 ---
 
 ## 🧪 Menjalankan Automated Tests
 
-Backend dilengkapi dengan suite pengujian otomatis untuk memverifikasi database WAL, API contracts, algoritma RELT, dan presisi lot sizing:
+Backend dilengkapi dengan suite pengujian otomatis untuk memverifikasi database WAL, API contracts, algoritma RELT, dan AI Prompt Engine:
 
 ```bash
 cd backend
-venv\Scripts\python.exe -m unittest test_signal_db.py test_signal_api.py test_relt_signal.py test_relt_total_audit.py test_screener.py test_bpjs_screener.py test_system_optimizations.py
+venv\Scripts\python.exe -m unittest test_ai_prompt_engine.py test_signal_db.py test_signal_api.py test_relt_signal.py test_relt_total_audit.py test_screener.py test_bpjs_screener.py test_system_optimizations.py
 ```
-*Hasil yang diharapkan: `Ran 16 tests ... OK` (100% Passed).*
+*Hasil yang diharapkan: `Ran 22 tests ... OK` (100% Passed).*
 
 ---
 

@@ -1,9 +1,9 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Share2, Loader2, Briefcase, Info, X, ExternalLink, Building2, Globe, MapPin, TrendingUp, BarChart3 } from 'lucide-react';
+import { Share2, Loader2, Briefcase, Info, X, ExternalLink, Building2, Globe, MapPin, TrendingUp, BarChart3, Sparkles } from 'lucide-react';
 
-export default function Header({ data, mode = 'live' }) {
+export default function Header({ data, mode = 'live', onOpenAiPrompt }) {
   const [isExporting, setIsExporting] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [profileInfo, setProfileInfo] = useState(null);
@@ -259,40 +259,6 @@ export default function Header({ data, mode = 'live' }) {
               <h1 className="text-4xl font-mono text-primary tracking-tight font-bold mobile-text-3xl" style={{ margin: 0, lineHeight: 1 }}>{data.ticker}</h1>
               <div className="flex-row items-center gap-xs text-secondary text-sm" style={{ gap: '6px' }}>
                 <span>{data.company_name} - IDX</span>
-                <button
-                  onClick={handleOpenProfile}
-                  title="Informasi Profil Emiten"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
-                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    color: 'var(--bullish)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                    padding: 0,
-                    outline: 'none',
-                    flexShrink: 0
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(74, 222, 128, 0.25)';
-                    e.currentTarget.style.borderColor = 'var(--bullish)';
-                    e.currentTarget.style.transform = 'scale(1.15)';
-                    e.currentTarget.style.boxShadow = '0 0 10px rgba(74, 222, 128, 0.4)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                    e.currentTarget.style.transform = 'scale(1)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <Info size={12} strokeWidth={2.5} />
-                </button>
               </div>
               <div style={{
                 display: 'inline-flex',
@@ -417,7 +383,69 @@ export default function Header({ data, mode = 'live' }) {
           </div>
 
           {/* Action Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {onOpenAiPrompt && (
+              <button
+                onClick={onOpenAiPrompt}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                  border: '1px solid rgba(59, 130, 246, 0.35)',
+                  color: '#60a5fa',
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  boxShadow: '0 0 15px rgba(59, 130, 246, 0.2)',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <Sparkles size={13} />
+                AI Prompt
+              </button>
+            )}
+
+            <a
+              href={`https://stockbit.com/symbol/${data.ticker}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Buka Stream, Komunitas & Analisis ${data.ticker} di Stockbit`}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                color: '#34d399',
+                padding: '6px 14px',
+                borderRadius: '8px',
+                fontSize: '11px',
+                fontWeight: '800',
+                textDecoration: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 0 14px rgba(16, 185, 129, 0.15)',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.22)';
+                e.currentTarget.style.borderColor = '#10b981';
+                e.currentTarget.style.boxShadow = '0 0 18px rgba(16, 185, 129, 0.3)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.12)';
+                e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.35)';
+                e.currentTarget.style.boxShadow = '0 0 14px rgba(16, 185, 129, 0.15)';
+                e.currentTarget.style.transform = 'none';
+              }}
+            >
+              <ExternalLink size={13} />
+              Stockbit
+            </a>
+
             <button
               onClick={handleOpenProfile}
               style={{
@@ -755,6 +783,44 @@ export default function Header({ data, mode = 'live' }) {
                       </div>
                     </div>
                   )}
+
+                  {/* Stockbit Community & Stream Banner */}
+                  <div style={{ marginTop: '4px' }}>
+                    <a
+                      href={`https://stockbit.com/symbol/${data.ticker}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                        borderRadius: '12px',
+                        padding: '12px 16px',
+                        color: '#34d399',
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        textDecoration: 'none',
+                        transition: 'all 0.15s ease',
+                        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.22)';
+                        e.currentTarget.style.borderColor = '#10b981';
+                        e.currentTarget.style.boxShadow = '0 0 20px rgba(16, 185, 129, 0.3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'rgba(16, 185, 129, 0.12)';
+                        e.currentTarget.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                        e.currentTarget.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.2)';
+                      }}
+                    >
+                      <ExternalLink size={14} />
+                      Buka Diskusi & Stream {data.ticker} di Stockbit
+                    </a>
+                  </div>
                 </>
               )}
             </div>

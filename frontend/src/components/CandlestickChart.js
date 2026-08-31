@@ -1,7 +1,12 @@
 'use client';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { createChart, ColorType, LineStyle, CrosshairMode } from 'lightweight-charts';
 import TradingViewWidget from './TradingViewWidget';
+import DrawingToolbar from './chart/DrawingToolbar';
+import DrawingCanvasOverlay from './chart/DrawingCanvasOverlay';
+import DrawingPropertiesBar from './chart/DrawingPropertiesBar';
+import { DRAWING_TOOLS, loadDrawings, saveDrawings, generateDrawingId } from '../utils/chartDrawingEngine';
 import { 
   calculateEMA, 
   calculateSupertrend, 
@@ -11,7 +16,7 @@ import {
 } from '../utils/reltChartEngine';
 import { 
   Maximize2, Minimize2, Camera, RefreshCw, Layers, 
-  TrendingUp, Crosshair, BarChart2, Shield, Zap, Sparkles, ChevronDown, Bell 
+  TrendingUp, Crosshair, BarChart2, Shield, Zap, Sparkles, ChevronDown, Bell, X 
 } from 'lucide-react';
 
 export default function CandlestickChart({ data }) {
@@ -19,11 +24,181 @@ export default function CandlestickChart({ data }) {
   const chartInstanceRef = useRef(null);
   const seriesRef = useRef({});
 
+  const [mounted, setMounted] = useState(false);
   const [timeframe, setTimeframe] = useState('1D'); // '1D', '1H', '15M'
   const [chartMode, setChartMode] = useState('candles'); // 'candles', 'heikin_ashi', 'line'
   const [chartSource, setChartSource] = useState('lightweight'); // 'lightweight' or 'tradingview'
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showIndicatorsDropdown, setShowIndicatorsDropdown] = useState(false);
+
+  // Interactive Drawing Engine States
+  const [drawings, setDrawings] = useState([]);
+  const [activeDrawingTool, setActiveDrawingTool] = useState(DRAWING_TOOLS.CURSOR);
+  const [selectedDrawingId, setSelectedDrawingId] = useState(null);
+  const [isMagnet, setIsMagnet] = useState(false);
+  const [isDrawingVisible, setIsDrawingVisible] = useState(true);
+  const [drawingPropsPos, setDrawingPropsPos] = useState({ x: 20, y: 20 });
+  const [undoStack, setUndoStack] = useState([]);
+  const [redoStack, setRedoStack] = useState([]);
+
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // Keyboard shortcut: Escape to exit Fullscreen & Body Scroll Lock
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFullscreen]);
+
+  const ticker = data?.ticker || 'IDX';
+
+  // Load and auto-save drawings per ticker
+  useEffect(() => {
+    if (ticker) {
+      const loaded = loadDrawings(ticker);
+      setDrawings(loaded);
+      setSelectedDrawingId(null);
+      setUndoStack([]);
+      setRedoStack([]);
+    }
+  }, [ticker]);
+
+  // Drawing Handlers
+  const handleAddDrawing = useCallback((newDrawing) => {
+    setDrawings((prev) => {
+      const next = [...prev, newDrawing];
+      saveDrawings(ticker, next);
+      setUndoStack((u) => [...u, prev]);
+      setRedoStack([]);
+      return next;
+    });
+  }, [ticker]);
+
+  const handleUpdateDrawing = useCallback((id, updates) => {
+    setDrawings((prev) => {
+      const next = prev.map((d) => (d.id === id ? { ...d, ...updates } : d));
+      saveDrawings(ticker, next);
+      return next;
+    });
+  }, [ticker]);
+
+  const handleDeleteDrawing = useCallback((id) => {
+    setDrawings((prev) => {
+      const next = prev.filter((d) => d.id !== id);
+      saveDrawings(ticker, next);
+      setUndoStack((u) => [...u, prev]);
+      setRedoStack([]);
+      return next;
+    });
+    setSelectedDrawingId(null);
+  }, [ticker]);
+
+  const handleDuplicateDrawing = useCallback((id) => {
+    setDrawings((prev) => {
+      const target = prev.find((d) => d.id === id);
+      if (!target) return prev;
+      const cloned = {
+        ...target,
+        id: generateDrawingId(),
+        p1: { ...target.p1, price: target.p1.price * 1.01 },
+        p2: target.p2 ? { ...target.p2, price: target.p2.price * 1.01 } : undefined,
+      };
+      const next = [...prev, cloned];
+      saveDrawings(ticker, next);
+      setUndoStack((u) => [...u, prev]);
+      setRedoStack([]);
+      setSelectedDrawingId(cloned.id);
+      return next;
+    });
+  }, [ticker]);
+
+  const handleClearAllDrawings = useCallback(() => {
+    setDrawings((prev) => {
+      setUndoStack((u) => [...u, prev]);
+      setRedoStack([]);
+      saveDrawings(ticker, []);
+      return [];
+    });
+    setSelectedDrawingId(null);
+  }, [ticker]);
+
+  const handleUndo = useCallback(() => {
+    setUndoStack((u) => {
+      if (u.length === 0) return u;
+      const prev = u[u.length - 1];
+      const remaining = u.slice(0, -1);
+      setDrawings((curr) => {
+        setRedoStack((r) => [...r, curr]);
+        saveDrawings(ticker, prev);
+        return prev;
+      });
+      return remaining;
+    });
+  }, [ticker]);
+
+  const handleRedo = useCallback(() => {
+    setRedoStack((r) => {
+      if (r.length === 0) return r;
+      const next = r[r.length - 1];
+      const remaining = r.slice(0, -1);
+      setDrawings((curr) => {
+        setUndoStack((u) => [...u, curr]);
+        saveDrawings(ticker, next);
+        return next;
+      });
+      return remaining;
+    });
+  }, [ticker]);
+
+  // Keyboard Shortcuts for Drawings & Tools
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Escape key: deselect drawing or cancel active tool
+      if (e.key === 'Escape') {
+        if (selectedDrawingId) {
+          setSelectedDrawingId(null);
+        } else if (activeDrawingTool !== DRAWING_TOOLS.CURSOR) {
+          setActiveDrawingTool(DRAWING_TOOLS.CURSOR);
+        }
+      }
+
+      // Delete / Backspace key: remove selected drawing
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedDrawingId) {
+        if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+        handleDeleteDrawing(selectedDrawingId);
+      }
+
+      // Ctrl+Z (Undo)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+
+      // Ctrl+Y or Ctrl+Shift+Z (Redo)
+      if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedDrawingId, activeDrawingTool, handleDeleteDrawing, handleUndo, handleRedo]);
 
   // Indicator Toggle States (matching reltsignal.pine)
   const [toggles, setToggles] = useState({
@@ -38,7 +213,6 @@ export default function CandlestickChart({ data }) {
   // Crosshair hover state for Floating Legend
   const [hoverData, setHoverData] = useState(null);
 
-  const ticker = data?.ticker || 'IDX';
   const companyName = data?.company_name || '';
   const lastPrice = data?.last_price || 0;
   const reltSignal = data?.relt_signal;
@@ -473,14 +647,15 @@ export default function CandlestickChart({ data }) {
     // Initial view fit
     chart.timeScale().fitContent();
 
-    // Resize Handler with ResizeObserver for seamless tab-switching
+    // Resize Handler with ResizeObserver for seamless tab-switching & fullscreen
     const handleResize = () => {
       if (chartContainerRef.current && chartInstanceRef.current) {
         const clientW = chartContainerRef.current.clientWidth;
-        if (clientW > 0) {
+        const clientH = chartContainerRef.current.clientHeight;
+        if (clientW > 0 && clientH > 0) {
           chartInstanceRef.current.applyOptions({
             width: clientW,
-            height: isFullscreen ? (window.innerHeight - 140) : 520,
+            height: clientH,
           });
         }
       }
@@ -490,11 +665,11 @@ export default function CandlestickChart({ data }) {
 
     const resizeObserver = new ResizeObserver((entries) => {
       if (entries.length > 0 && chartContainerRef.current && chartInstanceRef.current) {
-        const { width } = entries[0].contentRect;
-        if (width > 0) {
+        const { width, height } = entries[0].contentRect;
+        if (width > 0 && height > 0) {
           chartInstanceRef.current.applyOptions({
-            width: width,
-            height: isFullscreen ? (window.innerHeight - 140) : 520,
+            width: Math.floor(width),
+            height: Math.floor(height),
           });
         }
       }
@@ -529,37 +704,24 @@ export default function CandlestickChart({ data }) {
     : defaultPriceChangePct;
   const isUpBar = currentDiff >= 0;
 
-  return (
-    <div 
-      className="card flex-col"
-      style={{
-        padding: '20px',
-        gap: '16px',
-        background: '#0e1118',
-        border: '1px solid rgba(255, 255, 255, 0.09)',
-        borderRadius: '18px',
-        boxShadow: '0 20px 50px -10px rgba(0,0,0,0.85), inset 0 1px 0 0 rgba(255,255,255,0.06)',
-        position: isFullscreen ? 'fixed' : 'relative',
-        top: isFullscreen ? 0 : 'auto',
-        left: isFullscreen ? 0 : 'auto',
-        right: isFullscreen ? 0 : 'auto',
-        bottom: isFullscreen ? 0 : 'auto',
-        zIndex: isFullscreen ? 9999 : 'auto',
-        width: isFullscreen ? '100vw' : '100%',
-        height: isFullscreen ? '100vh' : 'auto',
-      }}
-    >
+  const renderChartBody = () => (
+    <>
       {/* 1. TradingView Pro Top Control Bar */}
       <div 
-        className="flex-row justify-between items-center flex-wrap gap-md"
         style={{
-          paddingBottom: '12px',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.07)'
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '10px',
+          paddingBottom: '10px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          flexShrink: 0
         }}
       >
         {/* Left Side: Ticker, Price, Timeframes, Chart Mode */}
-        <div className="flex-row items-center gap-md flex-wrap">
-          <div className="flex-row items-center gap-xs">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '18px', fontWeight: '900', letterSpacing: '0.05em', color: '#fff', fontFamily: 'var(--font-mono)' }}>
               {ticker}
             </span>
@@ -589,12 +751,12 @@ export default function CandlestickChart({ data }) {
                 key={tf}
                 onClick={() => setTimeframe(tf)}
                 style={{
-                  padding: '5px 12px',
+                  padding: '4px 11px',
                   borderRadius: '6px',
                   backgroundColor: timeframe === tf ? '#2563eb' : 'transparent',
                   color: timeframe === tf ? '#ffffff' : '#94a3b8',
                   fontWeight: timeframe === tf ? '800' : '600',
-                  fontSize: '12px',
+                  fontSize: '11.5px',
                   border: 'none',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
@@ -624,7 +786,7 @@ export default function CandlestickChart({ data }) {
                 key={m.id}
                 onClick={() => setChartMode(m.id)}
                 style={{
-                  padding: '5px 10px',
+                  padding: '4px 10px',
                   borderRadius: '6px',
                   backgroundColor: chartMode === m.id ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
                   color: chartMode === m.id ? '#ffffff' : '#94a3b8',
@@ -642,13 +804,13 @@ export default function CandlestickChart({ data }) {
         </div>
 
         {/* Right Side: Indicator Layer Toggles & Action Controls */}
-        <div className="flex-row items-center gap-sm flex-wrap">
-          {/* Indicator Toggles Dropdown / Chips */}
-          <div className="flex-row items-center gap-xs" style={{ flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {/* Indicator Toggles */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
             <button
               onClick={() => toggleIndicator('supertrend')}
               style={{
-                padding: '5px 10px',
+                padding: '4px 9px',
                 borderRadius: '6px',
                 backgroundColor: toggles.supertrend ? 'rgba(16, 185, 129, 0.18)' : 'rgba(255, 255, 255, 0.03)',
                 color: toggles.supertrend ? '#10b981' : '#64748b',
@@ -660,15 +822,15 @@ export default function CandlestickChart({ data }) {
                 alignItems: 'center',
                 gap: '4px'
               }}
-              title="Toggle Supertrend (Pine Script Factor 3.0, ATR 10)"
+              title="Toggle Supertrend (Factor 3.0, ATR 10)"
             >
-              <Zap size={12} /> Supertrend
+              <Zap size={11} /> Supertrend
             </button>
 
             <button
               onClick={() => toggleIndicator('emaRibbon')}
               style={{
-                padding: '5px 10px',
+                padding: '4px 9px',
                 borderRadius: '6px',
                 backgroundColor: toggles.emaRibbon ? 'rgba(56, 189, 248, 0.18)' : 'rgba(255, 255, 255, 0.03)',
                 color: toggles.emaRibbon ? '#38bdf8' : '#64748b',
@@ -682,13 +844,13 @@ export default function CandlestickChart({ data }) {
               }}
               title="Toggle EMA Ribbon (9, 21, 50, 200)"
             >
-              <TrendingUp size={12} /> EMA Ribbon
+              <TrendingUp size={11} /> EMA Ribbon
             </button>
 
             <button
               onClick={() => toggleIndicator('smcLevels')}
               style={{
-                padding: '5px 10px',
+                padding: '4px 9px',
                 borderRadius: '6px',
                 backgroundColor: toggles.smcLevels ? 'rgba(192, 132, 252, 0.18)' : 'rgba(255, 255, 255, 0.03)',
                 color: toggles.smcLevels ? '#c084fc' : '#64748b',
@@ -702,13 +864,13 @@ export default function CandlestickChart({ data }) {
               }}
               title="Toggle Order Blocks & FVG Zones"
             >
-              <Layers size={12} /> SMC Zones
+              <Layers size={11} /> SMC Zones
             </button>
 
             <button
               onClick={() => toggleIndicator('tradeLevels')}
               style={{
-                padding: '5px 10px',
+                padding: '4px 9px',
                 borderRadius: '6px',
                 backgroundColor: toggles.tradeLevels ? 'rgba(251, 191, 36, 0.18)' : 'rgba(255, 255, 255, 0.03)',
                 color: toggles.tradeLevels ? '#fbbf24' : '#64748b',
@@ -720,35 +882,15 @@ export default function CandlestickChart({ data }) {
                 alignItems: 'center',
                 gap: '4px'
               }}
-              title="Toggle Entry, SL, TP1, TP2, Trailing SL Lines & Target Forecast"
+              title="Toggle SL & Target TP1/TP2"
             >
-              <Crosshair size={12} /> Target Plan
-            </button>
-
-            <button
-              onClick={() => toggleIndicator('signals')}
-              style={{
-                padding: '5px 10px',
-                borderRadius: '6px',
-                backgroundColor: toggles.signals ? 'rgba(74, 222, 128, 0.18)' : 'rgba(255, 255, 255, 0.03)',
-                color: toggles.signals ? '#4ade80' : '#64748b',
-                border: toggles.signals ? '1px solid rgba(74, 222, 128, 0.4)' : '1px solid rgba(255, 255, 255, 0.06)',
-                fontSize: '11px',
-                fontWeight: '700',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px'
-              }}
-              title="Toggle Buy / Sell / TP / SL Historical and Active Markers"
-            >
-              <Bell size={12} /> Sinyal (Buy/TP/SL)
+              <Shield size={11} /> Targets
             </button>
 
             <button
               onClick={() => toggleIndicator('volume')}
               style={{
-                padding: '5px 10px',
+                padding: '4px 9px',
                 borderRadius: '6px',
                 backgroundColor: toggles.volume ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.03)',
                 color: toggles.volume ? '#e2e8f0' : '#64748b',
@@ -762,39 +904,63 @@ export default function CandlestickChart({ data }) {
               }}
               title="Toggle Volume Pane & MA20"
             >
-              <BarChart2 size={12} /> Vol
+              <BarChart2 size={11} /> Vol
             </button>
           </div>
 
-          <div style={{ width: '1px', height: '20px', backgroundColor: 'rgba(255, 255, 255, 0.1)' }} />
+          <div style={{ width: '1px', height: '18px', backgroundColor: 'rgba(255, 255, 255, 0.1)' }} />
 
           {/* Quick Action Icons */}
-          <div className="flex-row items-center gap-xs">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <button
               onClick={handleResetZoom}
-              className="btn btn-ghost"
-              style={{ padding: '6px', color: '#94a3b8' }}
+              style={{
+                padding: '5px 8px',
+                borderRadius: '6px',
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center'
+              }}
               title="Reset Zoom / Fit Content"
             >
-              <RefreshCw size={15} />
+              <RefreshCw size={13} />
             </button>
 
             <button
               onClick={handleCaptureSnapshot}
-              className="btn btn-ghost"
-              style={{ padding: '6px', color: '#94a3b8' }}
+              style={{
+                padding: '5px 8px',
+                borderRadius: '6px',
+                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center'
+              }}
               title="Download Chart Snapshot"
             >
-              <Camera size={15} />
+              <Camera size={13} />
             </button>
 
             <button
               onClick={toggleFullscreen}
-              className="btn btn-ghost"
-              style={{ padding: '6px', color: '#94a3b8' }}
-              title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+              style={{
+                padding: '5px 8px',
+                borderRadius: '6px',
+                backgroundColor: isFullscreen ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                border: isFullscreen ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
+                color: isFullscreen ? '#60a5fa' : '#94a3b8',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+              title={isFullscreen ? 'Keluar Fullscreen (Esc)' : 'Perbesar Chart (Fullscreen)'}
             >
-              {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+              {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
             </button>
           </div>
 
@@ -803,19 +969,19 @@ export default function CandlestickChart({ data }) {
             display: 'flex',
             alignItems: 'center',
             backgroundColor: 'rgba(255, 255, 255, 0.04)',
-            padding: '3px',
-            borderRadius: '8px',
+            padding: '2px',
+            borderRadius: '6px',
             border: '1px solid rgba(255, 255, 255, 0.08)'
           }}>
             <button
               onClick={() => setChartSource('lightweight')}
               style={{
-                padding: '4px 10px',
-                borderRadius: '6px',
+                padding: '3px 8px',
+                borderRadius: '4px',
                 backgroundColor: chartSource === 'lightweight' ? '#38bdf8' : 'transparent',
                 color: chartSource === 'lightweight' ? '#000000' : '#94a3b8',
                 fontWeight: '700',
-                fontSize: '11px',
+                fontSize: '10.5px',
                 border: 'none',
                 cursor: 'pointer',
               }}
@@ -825,12 +991,12 @@ export default function CandlestickChart({ data }) {
             <button
               onClick={() => setChartSource('tradingview')}
               style={{
-                padding: '4px 10px',
-                borderRadius: '6px',
+                padding: '3px 8px',
+                borderRadius: '4px',
                 backgroundColor: chartSource === 'tradingview' ? '#38bdf8' : 'transparent',
                 color: chartSource === 'tradingview' ? '#000000' : '#94a3b8',
                 fontWeight: '700',
-                fontSize: '11px',
+                fontSize: '10.5px',
                 border: 'none',
                 cursor: 'pointer',
               }}
@@ -838,55 +1004,95 @@ export default function CandlestickChart({ data }) {
               TV Embed
             </button>
           </div>
+
+          {/* Dedicated Close Button in Fullscreen */}
+          {isFullscreen && (
+            <button
+              onClick={() => setIsFullscreen(false)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                backgroundColor: 'rgba(244, 63, 94, 0.15)',
+                border: '1px solid rgba(244, 63, 94, 0.35)',
+                color: '#f87171',
+                fontSize: '11px',
+                fontWeight: '800',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              title="Tutup Fullscreen (Esc)"
+            >
+              <X size={13} />
+              Tutup (Esc)
+            </button>
+          )}
         </div>
       </div>
 
-      {/* 2. Chart Canvas Area with Floating HUD Legend */}
-      <div style={{ position: 'relative', width: '100%' }}>
+      {/* 2. Chart Canvas Area with Floating HUD Legend & Drawing Layer */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        flex: isFullscreen ? '1 1 auto' : 'none',
+        height: isFullscreen ? '100%' : '520px',
+        minHeight: isFullscreen ? '0' : '520px',
+        overflow: 'hidden',
+        marginTop: '6px'
+      }}>
         {chartSource === 'tradingview' ? (
-          <TradingViewWidget ticker={ticker} height={isFullscreen ? 'calc(100vh - 160px)' : '520px'} />
+          <TradingViewWidget ticker={ticker} height="100%" />
         ) : (
           <>
             {/* Floating TradingView-style Legend (HUD) */}
             <div style={{
               position: 'absolute',
-              top: '12px',
-              left: '14px',
+              top: '10px',
+              left: '48px',
               zIndex: 10,
               pointerEvents: 'none',
               display: 'flex',
               flexDirection: 'column',
               gap: '4px',
+              backgroundColor: 'rgba(11, 15, 25, 0.85)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              padding: '6px 12px',
+              borderRadius: '10px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
               fontFamily: 'var(--font-mono)',
-              fontSize: '12px',
+              fontSize: '11.5px',
               lineHeight: '1.4',
-              color: '#e2e8f0',
-              textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+              color: '#e2e8f0'
             }}>
               {/* Row 1: Ticker OHLC & Change */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <span style={{ fontWeight: '800', color: '#ffffff' }}>{ticker}</span>
-                <span style={{ color: '#94a3b8' }}>•</span>
+                <span style={{ color: '#64748b' }}>•</span>
                 <span>O <b style={{ color: isUpBar ? '#10b981' : '#f43f5e' }}>{displayBar.open ? displayBar.open.toLocaleString() : '-'}</b></span>
                 <span>H <b style={{ color: isUpBar ? '#10b981' : '#f43f5e' }}>{displayBar.high ? displayBar.high.toLocaleString() : '-'}</b></span>
                 <span>L <b style={{ color: isUpBar ? '#10b981' : '#f43f5e' }}>{displayBar.low ? displayBar.low.toLocaleString() : '-'}</b></span>
                 <span>C <b style={{ color: isUpBar ? '#10b981' : '#f43f5e' }}>{displayBar.close ? displayBar.close.toLocaleString() : '-'}</b></span>
                 <span style={{
-                  padding: '1px 6px',
+                  padding: '1px 5px',
                   borderRadius: '4px',
                   backgroundColor: isUpBar ? 'rgba(16, 185, 129, 0.2)' : 'rgba(244, 63, 94, 0.2)',
                   color: isUpBar ? '#10b981' : '#f43f5e',
-                  fontWeight: '700'
+                  fontWeight: '700',
+                  fontSize: '11px'
                 }}>
                   {isUpBar ? '+' : ''}{currentDiff} ({isUpBar ? '+' : ''}{currentDiffPct}%)
                 </span>
                 {hoverData?.time && (
-                  <span style={{ color: '#64748b', fontSize: '11px' }}>[{hoverData.time}]</span>
+                  <span style={{ color: '#94a3b8', fontSize: '10.5px' }}>[{hoverData.time}]</span>
                 )}
               </div>
 
               {/* Row 2: Live Indicator Numeric Values */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', fontSize: '11px', color: '#94a3b8' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', fontSize: '10.5px', color: '#94a3b8' }}>
                 {toggles.supertrend && (
                   <span style={{ color: supertrendRes.isBullish ? '#10b981' : '#f43f5e' }}>
                     ST(3,10): <b>{supertrendRes.lastValue.toLocaleString()} ({supertrendRes.isBullish ? 'BULL' : 'BEAR'})</b>
@@ -914,24 +1120,70 @@ export default function CandlestickChart({ data }) {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              opacity: 0.04,
+              opacity: 0.03,
               userSelect: 'none'
             }}>
-              <span style={{ fontSize: '90px', fontWeight: '900', letterSpacing: '0.1em', color: '#fff', fontFamily: 'var(--font-mono)' }}>
+              <span style={{ fontSize: '80px', fontWeight: '900', letterSpacing: '0.1em', color: '#fff', fontFamily: 'var(--font-mono)' }}>
                 {ticker}
               </span>
-              <span style={{ fontSize: '20px', fontWeight: '700', letterSpacing: '0.3em', color: '#fff' }}>
+              <span style={{ fontSize: '16px', fontWeight: '700', letterSpacing: '0.3em', color: '#fff' }}>
                 RELT SIGNAL PRO
               </span>
             </div>
+
+            {/* 1. TradingView-Style Left Sidebar Toolbar */}
+            <DrawingToolbar
+              activeTool={activeDrawingTool}
+              setActiveTool={setActiveDrawingTool}
+              isMagnet={isMagnet}
+              setIsMagnet={setIsMagnet}
+              isVisible={isDrawingVisible}
+              setIsVisible={setIsDrawingVisible}
+              canUndo={undoStack.length > 0}
+              canRedo={redoStack.length > 0}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              onClearAll={handleClearAllDrawings}
+              drawingsCount={drawings.length}
+            />
+
+            {/* 2. Interactive SVG Drawing Layer */}
+            <DrawingCanvasOverlay
+              chart={chartInstanceRef.current}
+              series={seriesRef.current?.main}
+              ohlcData={formattedData}
+              drawings={drawings}
+              activeTool={activeDrawingTool}
+              setActiveTool={setActiveDrawingTool}
+              selectedDrawingId={selectedDrawingId}
+              setSelectedDrawingId={setSelectedDrawingId}
+              isMagnet={isMagnet}
+              isVisible={isDrawingVisible}
+              onAddDrawing={handleAddDrawing}
+              onUpdateDrawing={handleUpdateDrawing}
+              onDeleteDrawing={handleDeleteDrawing}
+              onSelectPosition={setDrawingPropsPos}
+            />
+
+            {/* 3. Floating Mini Properties Bar for Selected Drawing */}
+            {selectedDrawingId && (
+              <DrawingPropertiesBar
+                selectedDrawing={drawings.find((d) => d.id === selectedDrawingId)}
+                onUpdateDrawing={handleUpdateDrawing}
+                onDeleteDrawing={handleDeleteDrawing}
+                onDuplicateDrawing={handleDuplicateDrawing}
+                onDeselect={() => setSelectedDrawingId(null)}
+                position={drawingPropsPos}
+              />
+            )}
 
             {/* Chart DOM Container */}
             <div 
               ref={chartContainerRef} 
               style={{ 
                 width: '100%', 
-                height: isFullscreen ? 'calc(100vh - 160px)' : '520px',
-                borderRadius: '12px',
+                height: '100%',
+                borderRadius: isFullscreen ? '0px' : '12px',
                 overflow: 'hidden'
               }} 
             />
@@ -941,17 +1193,22 @@ export default function CandlestickChart({ data }) {
 
       {/* 3. Bottom Range Switcher & Indicators Legend Ribbon */}
       <div 
-        className="flex-row justify-between items-center flex-wrap gap-md"
         style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '8px',
           paddingTop: '8px',
-          borderTop: '1px solid rgba(255, 255, 255, 0.05)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.06)',
           fontSize: '11px',
-          fontFamily: 'var(--font-mono)'
+          fontFamily: 'var(--font-mono)',
+          flexShrink: 0
         }}
       >
         {/* Quick Range Zoom Buttons */}
-        <div className="flex-row items-center gap-xs">
-          <span className="text-muted" style={{ marginRight: '4px' }}>Range:</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span style={{ color: 'var(--text-muted)', marginRight: '4px' }}>Range:</span>
           {[
             { label: '1M', bars: 22 },
             { label: '3M', bars: 66 },
@@ -987,29 +1244,77 @@ export default function CandlestickChart({ data }) {
         </div>
 
         {/* Visual Color Legend Guide */}
-        <div className="flex-row items-center gap-md flex-wrap" style={{ color: '#64748b' }}>
-          <div className="flex-row items-center gap-xs">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', color: '#64748b' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} />
             <span>Bullish Supertrend</span>
           </div>
-          <div className="flex-row items-center gap-xs">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#f43f5e' }} />
             <span>Bearish Supertrend</span>
           </div>
-          <div className="flex-row items-center gap-xs">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <div style={{ width: '8px', height: '3px', backgroundColor: '#eab308' }} />
             <span>EMA 9</span>
           </div>
-          <div className="flex-row items-center gap-xs">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <div style={{ width: '8px', height: '3px', backgroundColor: '#38bdf8' }} />
             <span>EMA 21</span>
           </div>
-          <div className="flex-row items-center gap-xs">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <div style={{ width: '8px', height: '3px', backgroundColor: '#c084fc' }} />
             <span>EMA 200</span>
           </div>
         </div>
       </div>
+    </>
+  );
+
+  if (isFullscreen && mounted) {
+    return createPortal(
+      <div 
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 999999,
+          backgroundColor: '#070a12',
+          display: 'flex',
+          flexDirection: 'column',
+          width: '100vw',
+          height: '100vh',
+          padding: '12px 18px',
+          boxSizing: 'border-box',
+          overflow: 'hidden',
+          animation: 'fadeInFullscreen 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}
+      >
+        <style>{`
+          @keyframes fadeInFullscreen {
+            from { opacity: 0; transform: scale(0.99); }
+            to { opacity: 1; transform: scale(1); }
+          }
+        `}</style>
+        {renderChartBody()}
+      </div>,
+      document.body
+    );
+  }
+
+  return (
+    <div 
+      className="card flex-col"
+      style={{
+        padding: '20px',
+        gap: '14px',
+        background: '#0e1118',
+        border: '1px solid rgba(255, 255, 255, 0.09)',
+        borderRadius: '18px',
+        boxShadow: '0 20px 50px -10px rgba(0,0,0,0.85), inset 0 1px 0 0 rgba(255,255,255,0.06)',
+        position: 'relative',
+        width: '100%',
+      }}
+    >
+      {renderChartBody()}
     </div>
   );
 }

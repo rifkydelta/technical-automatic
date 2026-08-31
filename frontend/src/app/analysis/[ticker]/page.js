@@ -17,6 +17,10 @@ import TechnicalTab from '@/components/TechnicalTab';
 import ChartPatternTab from '@/components/chartpattern/ChartPatternTab';
 import HistoricalBacktestView from '@/components/technical/HistoricalBacktestView';
 import ReltSignalCard from '@/components/ReltSignalCard';
+import AiPromptModal from '@/components/ai/AiPromptModal';
+import AiPasteModal from '@/components/ai/AiPasteModal';
+import AiReportView from '@/components/ai/AiReportView';
+import AiHistoryDrawer from '@/components/ai/AiHistoryDrawer';
 import {
   ArrowLeft,
   RefreshCw,
@@ -29,7 +33,9 @@ import {
   Shapes,
   History,
   Zap,
-  Activity
+  Activity,
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
 
 const QUICK_WATCHLIST = ['BBCA', 'BBRI', 'BMRI', 'BBNI', 'VKTR', 'AUTO', 'DSSA', 'BRIS', 'ADRO', 'PTBA', 'BREN', 'ASII'];
@@ -51,8 +57,30 @@ function AnalysisContent({ params }) {
   const [activeTab, setActiveTab] = useState(urlTab);
   const [mode, setMode] = useState(urlMode);
 
+  // AI Deep Analysis States
+  const [aiData, setAiData] = useState(null);
+  const [isAiPromptOpen, setIsAiPromptOpen] = useState(false);
+  const [isAiPasteOpen, setIsAiPasteOpen] = useState(false);
+  const [isAiHistoryOpen, setIsAiHistoryOpen] = useState(false);
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
   const resultsRef = useRef(null);
+
+  // Load cached AI analysis from LocalStorage
+  useEffect(() => {
+    if (ticker) {
+      try {
+        const cached = localStorage.getItem(`idx_ai_analysis_${ticker}`);
+        if (cached) {
+          setAiData(JSON.parse(cached));
+        } else {
+          setAiData(null);
+        }
+      } catch (e) {
+        setAiData(null);
+      }
+    }
+  }, [ticker]);
 
   // Fetch Analysis
   const fetchTickerAnalysis = async (targetTicker, currentMode) => {
@@ -122,6 +150,7 @@ function AnalysisContent({ params }) {
 
   const subTabs = [
     { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'ai', label: 'AI Analyst', icon: Sparkles, badge: aiData ? 'READY' : null },
     { id: 'technical', label: 'Technical', icon: TrendingUp },
     { id: 'financial', label: 'Financial', icon: PieChart },
     { id: 'news', label: 'News', icon: Newspaper },
@@ -205,6 +234,29 @@ function AnalysisContent({ params }) {
 
         {/* Action Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <a
+            href={`https://stockbit.com/symbol/${ticker}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Buka ${ticker} di Stockbit`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '8px',
+              backgroundColor: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              color: '#34d399',
+              fontSize: '12px',
+              fontWeight: '700',
+              textDecoration: 'none',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <ExternalLink size={13} /> Stockbit
+          </a>
+
           <button
             onClick={() => fetchTickerAnalysis(ticker, mode)}
             disabled={isLoading}
@@ -301,7 +353,12 @@ function AnalysisContent({ params }) {
       ) : data ? (
         <div id="export-container" ref={resultsRef} className="glass-panel flex-col" style={{ gap: '24px', padding: '32px', borderRadius: '24px' }}>
           {/* Header with Price, Change, and Actions */}
-          <Header data={data} mode={mode} onModeChange={handleModeChange} />
+          <Header
+            data={data}
+            mode={mode}
+            onModeChange={handleModeChange}
+            onOpenAiPrompt={() => setIsAiPromptOpen(true)}
+          />
 
           {/* Modern Segmented Sub-Tabs Nav (Sticky Glassmorphic) */}
           <div
@@ -347,6 +404,21 @@ function AnalysisContent({ params }) {
                 >
                   <Icon size={15} color={isActive ? 'var(--bullish)' : 'currentColor'} />
                   <span>{tab.label}</span>
+                  {tab.badge && (
+                    <span
+                      style={{
+                        fontSize: '9px',
+                        fontWeight: '800',
+                        backgroundColor: 'rgba(74, 222, 128, 0.2)',
+                        color: 'var(--bullish)',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                        border: '1px solid rgba(74, 222, 128, 0.3)'
+                      }}
+                    >
+                      {tab.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -362,6 +434,16 @@ function AnalysisContent({ params }) {
               <AnalysisCards data={data} />
               <ScenarioCards data={data} />
             </>
+          )}
+
+          {activeTab === 'ai' && (
+            <AiReportView
+              aiData={aiData}
+              onOpenPromptModal={() => setIsAiPromptOpen(true)}
+              onOpenPasteModal={() => setIsAiPasteOpen(true)}
+              onOpenHistory={() => setIsAiHistoryOpen(true)}
+              ticker={data.ticker}
+            />
           )}
 
           {activeTab === 'technical' && <TechnicalTab data={data} />}
@@ -417,6 +499,39 @@ function AnalysisContent({ params }) {
 
           <FooterRow data={data} />
           <Disclaimer />
+
+          {/* AI Modals */}
+          <AiPromptModal
+            isOpen={isAiPromptOpen}
+            onClose={() => setIsAiPromptOpen(false)}
+            data={data}
+            newsData={newsData}
+            onOpenPasteModal={() => setIsAiPasteOpen(true)}
+          />
+
+          <AiPasteModal
+            isOpen={isAiPasteOpen}
+            onClose={() => setIsAiPasteOpen(false)}
+            onSuccessImport={(imported) => {
+              setAiData(imported);
+              setActiveTab('ai');
+              router.replace(`/analysis/${ticker}?tab=ai&mode=${mode}`, { scroll: false });
+            }}
+            ticker={data.ticker}
+            companyName={data.company_name}
+            lastPrice={data.last_price}
+          />
+
+          <AiHistoryDrawer
+            isOpen={isAiHistoryOpen}
+            onClose={() => setIsAiHistoryOpen(false)}
+            ticker={data.ticker}
+            onSelectAnalysis={(selected) => {
+              setAiData(selected);
+              setActiveTab('ai');
+              router.replace(`/analysis/${ticker}?tab=ai&mode=${mode}`, { scroll: false });
+            }}
+          />
         </div>
       ) : null}
     </main>

@@ -1,6 +1,6 @@
-# 6. Skema Database & Konkurensi WAL (Database Schema & SQLite WAL)
+# 6. Skema Database & Konkurensi WAL (Database Schema & Storage Engine)
 
-Dokumen ini mendokumentasikan skema database SQLite, tipe data, indeks pencarian, optimasi konkurensi *Write-Ahead Logging (WAL)*, serta logika *idempotent upsert* pada **IDX Terminal**.
+Dokumen ini mendokumentasikan skema database SQLite, tipe data, indeks pencarian, optimasi konkurensi *Write-Ahead Logging (WAL)*, logika *idempotent upsert*, serta skema persistensi lokal (*LocalStorage*) pada **IDX Terminal**.
 
 ---
 
@@ -66,6 +66,7 @@ Setiap koneksi database diinisialisasi dengan konfigurasi berikut:
 PRAGMA journal_mode = WAL;
 PRAGMA synchronous = NORMAL;
 PRAGMA cache_size = 10000;
+PRAGMA busy_timeout = 5000;
 ```
 
 ### Manfaat Konfigurasi WAL:
@@ -108,3 +109,16 @@ ON CONFLICT(ticker, signal_date, signal_type) DO UPDATE SET
     tp2 = excluded.tp2,
     updated_at = CURRENT_TIMESTAMP;
 ```
+
+---
+
+## 5. Skema Penyimpanan Klien (Browser LocalStorage)
+
+Hasil analisis AI yang diimpor pengguna disimpan secara otomatis di sisi browser menggunakan LocalStorage:
+
+| Key LocalStorage | Tipe Data | Deskripsi |
+| :--- | :--- | :--- |
+| `ai_analysis_active_{TICKER}` | `JSON Object` | Laporan analisis AI yang sedang aktif dirender pada tab AI Analyst emiten tersebut. |
+| `ai_analysis_history_{TICKER}` | `Array of Objects` | Riwayat log analisis AI masa lalu untuk ticker terkait (maksimal 20 riwayat terakhir). |
+| `idx_terminal_watchlist` | `Array of Strings` | Daftar kode saham pantauan cepat pengguna. |
+| `idx_terminal_risk_budget` | `Float` | Preferensi ukuran modal portofolio (default: Rp100.000.000). |

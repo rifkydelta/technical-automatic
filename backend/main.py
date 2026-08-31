@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.endpoints import analyze, ticker, news, market, signal
+from api.endpoints import analyze, ticker, news, market, signal, ai_analysis
 from db import init_db
 
 # Load environment variables
@@ -59,6 +59,7 @@ app.include_router(ticker.router, prefix="/api", tags=["ticker"])
 app.include_router(news.router, prefix="/api", tags=["news"])
 app.include_router(market.router, prefix="/api", tags=["market"])
 app.include_router(signal.router, prefix="/api", tags=["signal"])
+app.include_router(ai_analysis.router, prefix="/api/ai", tags=["ai_analysis"])
 
 
 @app.get("/")

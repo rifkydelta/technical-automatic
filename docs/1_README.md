@@ -1,6 +1,6 @@
-# IDX Terminal | Pro Algorithmic Market Intelligence
+# 1. IDX Terminal | Ringkasan Proyek & Fitur Lengkap
 
-> **Platform Analisis Kuantitatif, Smart Money Concepts (SMC), dan Pemindai Sinyal Realtime (1H & Daily) untuk Pasar Saham Indonesia (Bursa Efek Indonesia / IDX).**
+> **Platform Analisis Kuantitatif, Smart Money Concepts (SMC), Pemindai Sinyal Realtime (1H & Daily), Forensik Laba, serta AI Market Intelligence Hub untuk Seluruh Saham Bursa Efek Indonesia (BEI / IDX).**
 
 ---
 
@@ -26,13 +26,13 @@ Dibangun dengan arsitektur modern berkecepatan tinggi (**FastAPI** di sisi backe
 ```
 
 1. **Instalasi Otomatis (`setup.bat`)**:
-   - Skrip membuat `backend/venv`, menginstall library Python (`requirements.txt`), dan `npm install` pada frontend.
+   - Skrip membuat `backend/venv`, menginstall library Python (`requirements.txt`), dan menjalankan `npm install` pada frontend.
 2. **Jalankan Aplikasi (`run.bat`)**:
    - Skrip membersihkan port lama (:8000 & :3000), menyalakan backend FastAPI di port 8000 dan frontend Next.js di port 3000 dalam 2 jendela terpisah.
 
 ---
 
-## 🚀 Fitur Unggulan (Core Features)
+## 🚀 8 Pilar Fitur Utama (Core Pillars)
 
 ### 1. 📡 Live Signal Scanner (Realtime 1H Intraday & Daily Parity)
 - Pemindai otomatis 800+ emiten bursa dengan filter tren ketat (*Strict Trend Regime Gate*).
@@ -50,20 +50,28 @@ Dibangun dengan arsitektur modern berkecepatan tinggi (**FastAPI** di sisi backe
 - Deteksi otomatis Fair Value Gaps (*Bullish & Bearish FVG*), Order Blocks (OB), Break of Structure (BOS), Change of Character (CHOCH), dan Liquidity Sweeps.
 - Pengenalan pola grafik klasik (*Double Bottom, Head & Shoulders, Ascending Triangle, Channel*) dan pola candlestick impulsif (*Hammer, Bullish Engulfing, Morning Star*).
 
-### 4. 🔍 Multi-Strategy Screener & Preset Hub
-- Preset bawaan: **Bluechip LQ45**, **High Dividend Yield**, **BPJS Daytrade**, **BSJP 15:30 (Beli Sore Jual Pagi)**, **Rebound MA20**, dan **Breakout 52-Week High**.
-- Kemampuan pemindaian kustom multi-emiten secara paralel dengan komparasi volume 20-hari dan target hari pencapaian TP.
+### 4. 🤖 360° AI Analyst Engine & Prompt Hub
+- Ekstraksi 100% data kuantitatif komprehensif (Finansial 4-Tahun, 9-Poin Piotroski F-Score, 8-Variabel Beneish M-Score, Level Pivot Fibonacci, Order Blocks, dan 15 Berita terkini).
+- 1-Klik Launcher ke 5 Provider AI terdepan: **ChatGPT (GPT-4o/o3-mini)**, **Claude (Claude 3.7 Sonnet)**, **DeepSeek (DeepSeek R1)**, **Google Gemini (Gemini 2.0 Pro)**, dan **Perplexity**.
+- Kustomisasi Posisi Modal (*Average Price & Realtime Floating PnL %*), validasi skema JSON 6-badge, serta rendering **Executive Research Dashboard** dengan *Radial Conviction Gauge (0-100)*.
 
-### 5. 💎 Multi-Model Fundamental Valuation & 3-Year CAGR
-- Evaluasi nilai wajar (*Fair Value*) emiten menggunakan model:
-  - **Discounted Cash Flow (DCF)**
-  - **Benjamin Graham Number** ($\sqrt{22.5 \times \text{EPS} \times \text{BVPS}}$)
-  - **Peter Lynch Fair Value Model**
-  - **PBV Historical Band & Trailing PE**
+### 5. 🔗 Stockbit Adaptive Market Bridge
+- Integrasi tombol 1-klik adaptif di Header Toolbar, Top Breadcrumb, dan Modal Profil Emiten yang langsung membuka stream diskusi komunitas dan sentimen emiten di **Stockbit** (`https://stockbit.com/symbol/{TICKER}`).
+
+### 6. 💎 Forensik Laba & Valuasi Fundamental Multi-Model
+- **Multi-Model Fair Value**: Discounted Cash Flow (DCF), Benjamin Graham Number, Peter Lynch Fair Value, dan PBV Historical Band.
+- **Audit Forensik Kualitas Laba**:
+  - **Piotroski 9-Point F-Score** (Rentabilitas, Solvabilitas, Efisiensi Operasional).
+  - **Beneish 8-Variable M-Score** (Deteksi Rekayasa & Manipulasi Laba).
+  - **Altman Z-Score** & **DuPont 3-Way ROE Decomposition**.
 - Analisis pertumbuhan 3-tahun: Revenue CAGR, Net Income CAGR, ROE, ROA, DER, dan Cash Flow Quality Ratio.
 
-### 6. 📚 Learning Center & Strategy Knowledge Hub
-- 8 modul edukasi terstruktur mengenai SMC, Order Flow, ATR Volatilitas, Risk Management, Psikologi Trading, dan Panduan Praktis Stop Loss.
+### 7. 🔍 Multi-Strategy Screener & Preset Hub
+- Preset bawaan: **Bluechip LQ45**, **High Dividend Yield**, **BPJS Daytrade**, **BSJP 15:30 (Beli Sore Jual Pagi)**, **Rebound MA20**, dan **Breakout 52-Week High**.
+- Pemindaian paralel multi-emiten dengan komparasi volume 20-hari dan estimasi durasi pencapaian target.
+
+### 8. 📚 Learning Center & Strategy Knowledge Hub
+- 8 modul edukasi interaktif mengenai SMC, Order Flow, ATR Volatilitas, Risk Management, Psikologi Trading, dan Panduan Praktis Stop Loss.
 
 ---
 
@@ -74,11 +82,13 @@ Dibangun dengan arsitektur modern berkecepatan tinggi (**FastAPI** di sisi backe
 │                          FRONTEND APPLICATION                          │
 │     Next.js 16 (Turbopack) • React 19 • Vanilla CSS Design System      │
 │     Lightweight Charts v4 • TradingView Widgets • Lucide Icons         │
+│     AI Executive Dashboard • Live Schema Validator • Stockbit Bridge   │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ (REST API / Async HTTP)
 ┌───────────────────────────────────▼────────────────────────────────────┐
 │                           BACKEND ENGINE                               │
 │     FastAPI • Python 3.12 • Pandas • NumPy • TA-Lib • yfinance         │
+│     AiPromptService (360° Extractor) • RELT 10-Factor Engine           │
 │     In-Memory TTL Caching (30s) • Multi-Threaded Concurrent Workers     │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
@@ -93,11 +103,12 @@ Dibangun dengan arsitektur modern berkecepatan tinggi (**FastAPI** di sisi backe
 ## 📚 Navigasi Berkas Dokumentasi Lengkap
 
 1. [🏛️ **Arsitektur Sistem & Aliran Data** (`docs/2_SYSTEM_ARCHITECTURE.md`)](./2_SYSTEM_ARCHITECTURE.md)
-2. [📐 **Spesifikasi Algoritma Kuantitatif & Matematika** (`docs/3_QUANTITATIVE_ALGORITHMS.md`)](./3_QUANTITATIVE_ALGORITHMS.md)
+2. [📐 **Spesifikasi Algoritma Kuantitatif, SMC & Forensik** (`docs/3_QUANTITATIVE_ALGORITHMS.md`)](./3_QUANTITATIVE_ALGORITHMS.md)
 3. [🌐 **Spesifikasi REST API Lengkap** (`docs/4_API_SPECIFICATION.md`)](./4_API_SPECIFICATION.md)
 4. [🎨 **Frontend Design System & Charting Engine** (`docs/5_FRONTEND_DESIGN_SYSTEM.md`)](./5_FRONTEND_DESIGN_SYSTEM.md)
 5. [💾 **Database Schema & SQLite WAL Concurrency** (`docs/6_DATABASE_SCHEMA_WAL.md`)](./6_DATABASE_SCHEMA_WAL.md)
 6. [🚀 **Panduan Deployment & Operasional** (`docs/7_DEPLOYMENT_OPERATIONS.md`)](./7_DEPLOYMENT_OPERATIONS.md)
+7. [🤖 **Master AI Analyst & Prompt Intelligence Engine** (`docs/8_AI_ANALYST_ENGINE.md`)](./8_AI_ANALYST_ENGINE.md)
 
 ---
 

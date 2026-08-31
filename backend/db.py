@@ -72,9 +72,36 @@ def _init_db_sync():
             );
         """)
         conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_signals_dedup ON signals(ticker, signal_date, signal_type);")
+
+        # Create ai_analyses table for storing imported external AI deep dive analyses
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ai_analyses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticker TEXT NOT NULL,
+                company_name TEXT DEFAULT '',
+                analysis_date TEXT DEFAULT '',
+                provider_model TEXT DEFAULT '',
+                master_bias TEXT DEFAULT '',
+                conviction_score INTEGER DEFAULT 0,
+                primary_action TEXT DEFAULT '',
+                one_sentence_thesis TEXT DEFAULT '',
+                raw_json TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_analyses_ticker ON ai_analyses(ticker);")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_ai_analyses_created ON ai_analyses(created_at);")
+
         conn.commit()
     logger.info(f"Database initialized at {DB_PATH}")
 
 async def init_db():
     """Async wrapper for initializing the database without blocking the event loop."""
     await asyncio.to_thread(_init_db_sync)
+
+def get_db_connection():
+    """Get a synchronous SQLite connection with row factory enabled."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
