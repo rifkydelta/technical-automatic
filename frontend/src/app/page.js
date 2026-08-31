@@ -68,6 +68,8 @@ export default function Home() {
   const [topPicks, setTopPicks] = useState([]);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
   const [isLoadingPicks, setIsLoadingPicks] = useState(true);
+  const [radarSignalIndex, setRadarSignalIndex] = useState(0);
+  const [isRadarHovered, setIsRadarHovered] = useState(false);
 
   useEffect(() => {
     document.title = 'IDX Terminal | Pro Algorithmic Market Intelligence & Signal Radar';
@@ -84,7 +86,7 @@ export default function Home() {
       .finally(() => setIsLoadingStats(false));
 
     // 2. Fetch top market setups preview
-    fetch(`${API_URL}/api/signals/latest?limit=6`)
+    fetch(`${API_URL}/api/signals/latest?limit=8`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         const list = Array.isArray(data) ? data : (data?.signals || []);
@@ -102,6 +104,15 @@ export default function Home() {
       });
   }, []);
 
+  // 3. Live Radar Signal Stream Rotation (every 3.8s, paused on hover)
+  useEffect(() => {
+    if (isRadarHovered || !topPicks || topPicks.length === 0) return;
+    const timer = setInterval(() => {
+      setRadarSignalIndex((prev) => (prev + 1) % topPicks.length);
+    }, 3800);
+    return () => clearInterval(timer);
+  }, [isRadarHovered, topPicks]);
+
   const handleLaunchSearch = (e) => {
     e?.preventDefault();
     const clean = tickerInput.trim().toUpperCase();
@@ -114,6 +125,21 @@ export default function Home() {
     }
   };
 
+  const activeSignal1 = topPicks && topPicks.length > 0
+    ? topPicks[radarSignalIndex % topPicks.length]
+    : { ticker: 'BBCA', projected_pnl_pct: 5.25, relt_score: 88, relt_action: 'ULTRA BUY', entry_price: 10250 };
+
+  const activeSignal2 = topPicks && topPicks.length > 1
+    ? topPicks[(radarSignalIndex + 1) % topPicks.length]
+    : (topPicks && topPicks.length === 1 ? topPicks[0] : { ticker: 'BBRI', projected_pnl_pct: 4.85, relt_score: 85, relt_action: 'STRONG BUY', entry_price: 4950 });
+
+  const radarBlips = [
+    { top: '24%', left: '72%', ticker: topPicks[0]?.ticker || 'BBCA', score: topPicks[0]?.relt_score || 88 },
+    { top: '68%', left: '26%', ticker: topPicks[1]?.ticker || 'BBRI', score: topPicks[1]?.relt_score || 85 },
+    { top: '24%', left: '28%', ticker: topPicks[2]?.ticker || 'BMRI', score: topPicks[2]?.relt_score || 80 },
+    { top: '72%', left: '70%', ticker: topPicks[3]?.ticker || 'ASII', score: topPicks[3]?.relt_score || 78 },
+  ];
+
   return (
     <div className="relative min-h-screen" style={{ backgroundColor: 'var(--bg-primary, #050505)', color: 'var(--text-primary, #ffffff)' }}>
       {/* Ambient background glow */}
@@ -123,7 +149,6 @@ export default function Home() {
         
         {/* ══════════════════════════════════════════════════
             § 1. HERO — 2-Column Split (Left Copy / Right Radar)
-            Compact: fits viewport, no scroll to CTA
            ══════════════════════════════════════════════════ */}
         <section className="hero-grid"
           style={{
@@ -139,12 +164,12 @@ export default function Home() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '8px',
-                padding: '5px 12px',
+                padding: '4px 12px',
                 borderRadius: 'var(--radius-full)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                backgroundColor: 'rgba(255, 255, 255, 0.04)',
+                backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                border: '1px solid rgba(56, 189, 248, 0.2)',
                 marginBottom: '16px',
-                alignSelf: 'flex-start',
+                width: 'fit-content',
               }}
             >
               <span 
@@ -161,7 +186,6 @@ export default function Home() {
               </span>
             </div>
 
-            {/* Headline — solid white, accent on keyword only, no gradient slop */}
             <h1
               style={{
                 fontSize: 'clamp(28px, 4vw, 48px)',
@@ -176,7 +200,6 @@ export default function Home() {
               <span style={{ color: '#38bdf8' }}>Saham BEI</span>
             </h1>
 
-            {/* Subtitle — concise, max 20 words */}
             <p
               style={{
                 fontSize: '14px',
@@ -212,7 +235,6 @@ export default function Home() {
                   border: '1px solid rgba(255, 255, 255, 0.06)',
                 }}
               >
-                {/* Text Input */}
                 <div
                   style={{
                     flex: '1 1 200px',
@@ -248,44 +270,37 @@ export default function Home() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <div
                     style={{
+                      display: 'flex',
                       backgroundColor: 'rgba(255, 255, 255, 0.04)',
                       borderRadius: 'var(--radius-sm)',
-                      height: '44px',
                       padding: '3px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
                     }}
                   >
                     <button
                       type="button"
                       onClick={() => setMode('live')}
                       style={{
-                        padding: '5px 10px',
-                        borderRadius: '7px',
+                        padding: '6px 12px',
+                        borderRadius: 'calc(var(--radius-sm) - 2px)',
                         border: 'none',
-                        backgroundColor: mode === 'live' ? 'rgba(50, 53, 61, 0.9)' : 'transparent',
-                        color: mode === 'live' ? '#34d399' : '#64748b',
+                        backgroundColor: mode === 'live' ? '#38bdf8' : 'transparent',
+                        color: mode === 'live' ? '#080b12' : '#64748b',
                         fontSize: '11px',
                         fontWeight: '700',
                         ...S.mono,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
                       }}
                     >
-                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#34d399', boxShadow: '0 0 5px rgba(52, 211, 153, 0.6)' }} />
                       Live
                     </button>
-
                     <button
                       type="button"
                       onClick={() => setMode('simulasi')}
                       style={{
-                        padding: '5px 10px',
-                        borderRadius: '7px',
+                        padding: '6px 12px',
+                        borderRadius: 'calc(var(--radius-sm) - 2px)',
                         border: 'none',
                         backgroundColor: mode === 'simulasi' ? 'rgba(50, 53, 61, 0.9)' : 'transparent',
                         color: mode === 'simulasi' ? '#c084fc' : '#64748b',
@@ -312,20 +327,9 @@ export default function Home() {
                       fontSize: '13px',
                       border: 'none',
                       cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(59, 130, 246, 0.35)',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '5px',
-                      whiteSpace: 'nowrap',
-                      transition: 'all 0.15s ease',
-                    }}
-                    onMouseOver={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                      e.currentTarget.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.45)';
-                    }}
-                    onMouseOut={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.35)';
                     }}
                   >
                     Analisis <ArrowRight size={14} />
@@ -334,7 +338,6 @@ export default function Home() {
               </form>
             </div>
 
-            {/* Quick Preset Pills — no emoji per §3.D */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
               {PRESET_CLUSTERS.map((preset, idx) => (
                 <button
@@ -358,8 +361,12 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Right Column: Interactive Radar Scanner Visualizer */}
-          <div style={{ position: 'relative', width: '100%', minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* Right Column: Realtime Interactive 3D Radar Scanner Visualizer */}
+          <div 
+            style={{ position: 'relative', width: '100%', minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onMouseEnter={() => setIsRadarHovered(true)}
+            onMouseLeave={() => setIsRadarHovered(false)}
+          >
             <div 
               style={{
                 width: '100%',
@@ -369,7 +376,6 @@ export default function Home() {
                 backgroundColor: 'rgba(30, 41, 59, 0.35)',
                 border: '1px solid rgba(255, 255, 255, 0.07)',
                 backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
                 padding: '20px',
                 position: 'relative',
                 display: 'flex',
@@ -378,7 +384,6 @@ export default function Home() {
                 overflow: 'hidden',
               }}
             >
-              {/* Concentric Radar Pulse Rings */}
               <div 
                 style={{
                   position: 'relative',
@@ -396,14 +401,12 @@ export default function Home() {
                   boxShadow: '0 0 40px rgba(56, 189, 248, 0.1)',
                 }}
               >
-                {/* Animated Pulsing Rings */}
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                   <div className="radar-pulse-ring-1" style={{ position: 'absolute', width: '100%', height: '100%', borderRadius: '50%', border: '1px solid rgba(56, 189, 248, 0.15)' }} />
                   <div className="radar-pulse-ring-2" style={{ position: 'absolute', width: '75%', height: '75%', borderRadius: '50%', border: '1px solid rgba(56, 189, 248, 0.2)' }} />
                   <div className="radar-pulse-ring-3" style={{ position: 'absolute', width: '50%', height: '50%', borderRadius: '50%', border: '1px solid rgba(56, 189, 248, 0.3)' }} />
                 </div>
 
-                {/* Rotating Sweep Scanner Blade */}
                 <div 
                   className="radar-sweep-blade"
                   style={{
@@ -415,80 +418,135 @@ export default function Home() {
                   }}
                 />
 
-                {/* Center Scanner Icon */}
-                <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
-                  <Radio size={36} color="#38bdf8" />
-                  <span style={{ fontSize: '9px', fontWeight: '800', color: '#38bdf8', letterSpacing: '0.15em', ...S.mono }}>
-                    SCANNING
+                {/* Interactive Dynamic Radar Blips */}
+                {radarBlips.map((blip, idx) => (
+                  <div
+                    key={idx}
+                    className="radar-blip-dot"
+                    style={{
+                      top: blip.top,
+                      left: blip.left,
+                      animationDelay: `${idx * 0.7}s`
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push(`/analysis/${blip.ticker}?mode=${mode}`);
+                    }}
+                    title={`${blip.ticker} - Score ${blip.score}`}
+                  >
+                    <span className="radar-blip-label">{blip.ticker}</span>
+                  </div>
+                ))}
+
+                {/* Center Scanner Icon with Live Active Ticker */}
+                <div style={{ position: 'relative', zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', pointerEvents: 'none' }}>
+                  <Radio size={32} color="#38bdf8" />
+                  <span style={{ fontSize: '10px', fontWeight: '800', color: '#38bdf8', letterSpacing: '0.12em', ...S.mono }}>
+                    {activeSignal1?.ticker || 'RADAR'}
+                  </span>
+                  <span style={{ fontSize: '7.5px', color: 'rgba(255, 255, 255, 0.55)', letterSpacing: '0.05em', ...S.mono }}>
+                    {activeSignal1?.relt_score ? `SCORE ${activeSignal1.relt_score}` : 'SCANNING'}
                   </span>
                 </div>
               </div>
 
-              {/* Floating Panel 1: BBCA (Top-Left) */}
+              {/* Dynamic Floating Panel 1 (Top-Left) */}
               <div 
-                onClick={() => router.push(`/analysis/BBCA?mode=${mode}`)}
+                onClick={() => router.push(`/analysis/${activeSignal1.ticker}?mode=${mode}`)}
                 className="liquid-glass-hover"
                 style={{
                   position: 'absolute',
                   top: '14px',
                   left: '14px',
                   zIndex: 30,
-                  backgroundColor: 'rgba(11, 14, 21, 0.85)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  backdropFilter: 'blur(10px)',
+                  backgroundColor: 'rgba(11, 14, 21, 0.88)',
+                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                  backdropFilter: 'blur(12px)',
                   borderRadius: 'var(--radius-md)',
                   padding: '10px 12px',
                   cursor: 'pointer',
+                  minWidth: '120px',
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)'
                 }}
+                title={`Klik untuk analisa mendalam ${activeSignal1.ticker}`}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '6px', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px', overflow: 'hidden' }}>
-                    <img src="https://assets.stockbit.com/logos/companies/BBCA.png" alt="BBCA" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    <img 
+                      src={`https://assets.stockbit.com/logos/companies/${activeSignal1.ticker}.png`} 
+                      alt={activeSignal1.ticker} 
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                    />
                   </div>
                   <div>
-                    <p style={{ fontSize: '12px', fontWeight: '800', color: '#fff', ...S.mono, margin: 0 }}>BBCA</p>
-                    <p style={{ fontSize: '10px', color: '#34d399', fontWeight: '700', ...S.mono, margin: 0 }}>+1.25%</p>
+                    <p style={{ fontSize: '12px', fontWeight: '800', color: '#fff', ...S.mono, margin: 0 }}>
+                      {activeSignal1.ticker}
+                    </p>
+                    <p style={{ fontSize: '10px', color: '#34d399', fontWeight: '700', ...S.mono, margin: 0 }}>
+                      {activeSignal1.projected_pnl_pct ? `+${Number(activeSignal1.projected_pnl_pct).toFixed(2)}%` : '+5.25%'}
+                    </p>
                   </div>
                 </div>
-                {/* Mini equalizer bars */}
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '12px' }}>
-                  {[5, 9, 7, 12, 8, 11].map((h, i) => (
-                    <div key={i} style={{ width: '3px', height: `${h}px`, backgroundColor: i % 2 === 0 ? '#10b981' : '#34d399', borderRadius: '1px' }} />
+                  {[
+                    Math.max(4, ((activeSignal1.relt_score || 80) % 7) + 5),
+                    Math.max(6, ((activeSignal1.relt_score || 80) % 9) + 4),
+                    Math.max(5, ((activeSignal1.relt_score || 80) % 6) + 6),
+                    Math.max(7, ((activeSignal1.relt_score || 80) % 8) + 5),
+                    Math.max(5, ((activeSignal1.relt_score || 80) % 5) + 7),
+                    12
+                  ].map((h, i) => (
+                    <div key={i} style={{ width: '3px', height: `${h}px`, backgroundColor: i % 2 === 0 ? '#10b981' : '#38bdf8', borderRadius: '1px' }} />
                   ))}
                 </div>
               </div>
 
-              {/* Floating Panel 2: BBRI (Bottom-Right) */}
+              {/* Dynamic Floating Panel 2 (Bottom-Right) */}
               <div 
-                onClick={() => router.push(`/analysis/BBRI?mode=${mode}`)}
+                onClick={() => router.push(`/analysis/${activeSignal2.ticker}?mode=${mode}`)}
                 className="liquid-glass-hover"
                 style={{
                   position: 'absolute',
                   bottom: '14px',
                   right: '14px',
                   zIndex: 30,
-                  backgroundColor: 'rgba(11, 14, 21, 0.85)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  backdropFilter: 'blur(10px)',
+                  backgroundColor: 'rgba(11, 14, 21, 0.88)',
+                  border: '1px solid rgba(74, 222, 128, 0.25)',
+                  backdropFilter: 'blur(12px)',
                   borderRadius: 'var(--radius-md)',
                   padding: '10px 12px',
                   cursor: 'pointer',
+                  minWidth: '130px',
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)'
                 }}
+                title={`Klik untuk analisa mendalam ${activeSignal2.ticker}`}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
                   <div style={{ width: '28px', height: '28px', borderRadius: '6px', backgroundColor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px', overflow: 'hidden' }}>
-                    <img src="https://assets.stockbit.com/logos/companies/BBRI.png" alt="BBRI" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    <img 
+                      src={`https://assets.stockbit.com/logos/companies/${activeSignal2.ticker}.png`} 
+                      alt={activeSignal2.ticker} 
+                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                    />
                   </div>
                   <div>
-                    <p style={{ fontSize: '12px', fontWeight: '800', color: '#fff', ...S.mono, margin: 0 }}>BBRI</p>
-                    <p style={{ fontSize: '10px', color: '#34d399', fontWeight: '700', ...S.mono, margin: 0 }}>+0.85%</p>
+                    <p style={{ fontSize: '12px', fontWeight: '800', color: '#fff', ...S.mono, margin: 0 }}>
+                      {activeSignal2.ticker}
+                    </p>
+                    <p style={{ fontSize: '10px', color: 'rgba(255, 255, 255, 0.65)', fontWeight: '600', ...S.mono, margin: 0 }}>
+                      Rp{(activeSignal2.entry_price || 4950).toLocaleString('id-ID')}
+                    </p>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                   <span style={{ padding: '2px 5px', borderRadius: '4px', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: '#34d399', fontSize: '9px', fontWeight: '800', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                    STRONG BUY
+                    {activeSignal2.relt_action || 'STRONG BUY'}
                   </span>
-                  <span style={{ fontSize: '9.5px', color: 'rgba(255, 255, 255, 0.45)', ...S.mono }}>Score 92</span>
+                  <span style={{ fontSize: '9.5px', color: '#38bdf8', fontWeight: '700', ...S.mono }}>
+                    Score {activeSignal2.relt_score || 85}
+                  </span>
                 </div>
               </div>
             </div>

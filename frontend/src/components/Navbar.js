@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Terminal,
   Radio,
   Search,
   BookOpen,
@@ -95,12 +94,6 @@ export default function Navbar() {
   };
 
   const navLinks = [
-    {
-      href: '/',
-      label: 'Live Terminal',
-      icon: Terminal,
-      active: pathname === '/'
-    },
     {
       href: '/signals',
       label: 'Live Signal',
